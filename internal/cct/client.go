@@ -134,20 +134,45 @@ func (c *Client) Close() { c.cache.Stop() }
 
 // QueryLimit fetches up to limit features for p, paginating as needed. The
 // boolean return reports whether more features were available beyond the limit.
+//
+// ArcGIS only guarantees deterministic pagination when an orderByFields is
+// supplied. To make paging safe, the layer's object-ID field is appended as a
+// stable tiebreaker when one is available, and features are de-duplicated by
+// object ID across pages so an unstable upstream order can't yield duplicates.
 func (c *Client) QueryLimit(ctx context.Context, p arcgis.QueryParams, limit int) ([]arcgis.Feature, bool, error) {
+	oid := c.oidField(ctx, p.LayerID)
+	if oid != "" && !containsField(p.OrderByFields, oid) {
+		p.OrderByFields = append(append([]string{}, p.OrderByFields...), oid)
+	}
+
 	var out []arcgis.Feature
+	seen := make(map[any]struct{})
 	more := false
 	for {
 		fs, err := c.queryPage(ctx, p)
 		if err != nil {
 			return nil, false, err
 		}
-		out = append(out, fs.Features...)
+		added := 0
+		for _, f := range fs.Features {
+			if oid != "" {
+				if id, ok := f.Attrs()[oid]; ok {
+					if _, dup := seen[id]; dup {
+						continue
+					}
+					seen[id] = struct{}{}
+				}
+			}
+			out = append(out, f)
+			added++
+		}
 		if len(out) >= limit {
 			more = fs.ExceededTransferLimit || len(out) > limit
 			break
 		}
-		if !fs.ExceededTransferLimit || len(fs.Features) == 0 {
+		// Stop on the last page, an empty page, or a page that contributed
+		// nothing new (the latter guards against a non-advancing upstream).
+		if !fs.ExceededTransferLimit || len(fs.Features) == 0 || added == 0 {
 			break
 		}
 		p.ResultOffset += len(fs.Features)
@@ -157,6 +182,36 @@ func (c *Client) QueryLimit(ctx context.Context, p arcgis.QueryParams, limit int
 		more = true
 	}
 	return out, more, nil
+}
+
+// oidField returns the layer's object-ID field name, or "" if it can't be
+// determined. The result is derived from the cached layer schema.
+func (c *Client) oidField(ctx context.Context, layerID int) string {
+	info, err := c.LayerInfo(ctx, layerID)
+	if err != nil {
+		return ""
+	}
+	for _, f := range info.Fields {
+		if f.Type == "esriFieldTypeOID" {
+			return f.Name
+		}
+	}
+	return ""
+}
+
+// containsField reports whether name appears as a column in an orderByFields
+// list (ignoring any trailing ASC/DESC direction and case).
+func containsField(fields []string, name string) bool {
+	for _, f := range fields {
+		col := f
+		if i := strings.IndexByte(col, ' '); i >= 0 {
+			col = col[:i]
+		}
+		if strings.EqualFold(col, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // Count returns the number of features matching p.
