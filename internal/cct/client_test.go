@@ -48,6 +48,11 @@ func TestQueryLimitCapsResults(t *testing.T) {
 func TestQueryLimitPaginates(t *testing.T) {
 	var calls int32
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/query") {
+			// Layer-schema lookup (for the OID field); not a page fetch.
+			fmt.Fprint(w, `{"id":7,"fields":[]}`)
+			return
+		}
 		atomic.AddInt32(&calls, 1)
 		if r.URL.Query().Get("resultOffset") == "0" {
 			fmt.Fprint(w, `{"features":[{"properties":{"id":1}},{"properties":{"id":2}}],"exceededTransferLimit":true}`)
@@ -68,13 +73,17 @@ func TestQueryLimitPaginates(t *testing.T) {
 		t.Fatal("want more=false once the final page is reached")
 	}
 	if got := atomic.LoadInt32(&calls); got != 2 {
-		t.Fatalf("want 2 upstream calls, got %d", got)
+		t.Fatalf("want 2 upstream page calls, got %d", got)
 	}
 }
 
 func TestCacheAvoidsSecondCall(t *testing.T) {
 	var calls int32
-	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/query") {
+			fmt.Fprint(w, `{"id":7,"fields":[]}`) // OID schema lookup
+			return
+		}
 		atomic.AddInt32(&calls, 1)
 		fmt.Fprint(w, `{"features":[{"properties":{"id":1}}],"exceededTransferLimit":false}`)
 	})
@@ -86,7 +95,7 @@ func TestCacheAvoidsSecondCall(t *testing.T) {
 		}
 	}
 	if got := atomic.LoadInt32(&calls); got != 1 {
-		t.Fatalf("want 1 upstream call with caching, got %d", got)
+		t.Fatalf("want 1 upstream page call with caching, got %d", got)
 	}
 }
 
@@ -170,8 +179,10 @@ func TestRetryRecoversFromTransient(t *testing.T) {
 
 func TestNoRetryOnClientError(t *testing.T) {
 	var hits atomic.Int32
-	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		hits.Add(1)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/query") {
+			hits.Add(1) // count only page queries, not the OID schema lookup
+		}
 		http.Error(w, "bad field", http.StatusBadRequest) // 400 -> deterministic, no retry
 	})
 	srv := httptest.NewServer(h)
@@ -183,6 +194,42 @@ func TestNoRetryOnClientError(t *testing.T) {
 		t.Fatal("expected an error for HTTP 400")
 	}
 	if got := hits.Load(); got != 1 {
-		t.Fatalf("400 should not be retried, got %d hits", got)
+		t.Fatalf("400 query should not be retried, got %d hits", got)
+	}
+}
+
+func TestQueryLimitDeduplicatesAcrossPages(t *testing.T) {
+	var lastQuery string
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/query") {
+			// Layer schema: OBJECTID is the object-ID field.
+			fmt.Fprint(w, `{"id":1,"fields":[{"name":"OBJECTID","type":"esriFieldTypeOID","alias":"OBJECTID"}]}`)
+			return
+		}
+		lastQuery = r.URL.RawQuery
+		if r.URL.Query().Get("resultOffset") == "0" {
+			fmt.Fprint(w, `{"features":[
+				{"properties":{"OBJECTID":1}},{"properties":{"OBJECTID":2}},{"properties":{"OBJECTID":3}}
+			],"exceededTransferLimit":true}`)
+			return
+		}
+		// Second page overlaps the first (OBJECTID 3 repeats) — an unstable order.
+		fmt.Fprint(w, `{"features":[{"properties":{"OBJECTID":3}},{"properties":{"OBJECTID":4}}],"exceededTransferLimit":false}`)
+	})
+	c := newTestClient(t, h, 0)
+
+	feats, more, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 1}, 100)
+	if err != nil {
+		t.Fatalf("QueryLimit: %v", err)
+	}
+	if len(feats) != 4 {
+		t.Fatalf("want 4 unique features after dedup, got %d", len(feats))
+	}
+	if more {
+		t.Fatal("want more=false on the final page")
+	}
+	// The OID field must be appended as a stable pagination tiebreaker.
+	if !strings.Contains(lastQuery, "orderByFields=OBJECTID") {
+		t.Fatalf("expected OBJECTID appended to orderByFields, got %q", lastQuery)
 	}
 }
