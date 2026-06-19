@@ -1,0 +1,103 @@
+version: 2
+
+project_name: capetown-opendata-mcp
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: capetown-opendata-mcp
+    main: .
+    binary: capetown-opendata-mcp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .Date }}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# OCI image built and pushed with ko (bundled into GoReleaser).
+kos:
+  - id: capetown-opendata-mcp
+    build: capetown-opendata-mcp
+    base_image: cgr.dev/chainguard/static
+    repositories:
+      - ghcr.io/richardwooding/capetown-opendata-mcp
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    tags:
+      - "{{ .Version }}"
+      - latest
+    sbom: spdx
+    bare: true
+    preserve_import_paths: false
+    labels:
+      org.opencontainers.image.source: https://github.com/richardwooding/capetown-opendata-mcp
+      org.opencontainers.image.description: MCP server for the City of Cape Town Open Data Portal
+      org.opencontainers.image.licenses: MIT
+
+# Homebrew cask published to the user's tap.
+homebrew_casks:
+  - name: capetown-opendata-mcp
+    binaries:
+      - capetown-opendata-mcp
+    directory: Casks
+    homepage: "https://github.com/richardwooding/capetown-opendata-mcp"
+    description: "MCP server for the City of Cape Town Open Data Portal"
+    license: "MIT"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/capetown-opendata-mcp"]
+          end
+    repository:
+      owner: richardwooding
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
+release:
+  prerelease: auto

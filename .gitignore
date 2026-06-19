@@ -1,0 +1,5 @@
+/dist/
+/capetown-opendata-mcp
+coverage.out
+*.test
+.idea/
