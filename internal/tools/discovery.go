@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -12,6 +13,11 @@ type LayerRef struct {
 	Name string `json:"name" jsonschema:"the layer's display name"`
 }
 
+// ServiceInfoInput is the input for the service_info tool.
+type ServiceInfoInput struct {
+	NameContains string `json:"name_contains,omitempty" jsonschema:"case-insensitive substring; when set, only layers and tables whose name contains it are returned"`
+}
+
 // ServiceInfoResult describes the feature service and its layers.
 type ServiceInfoResult struct {
 	Description string     `json:"description" jsonschema:"the service description"`
@@ -19,10 +25,14 @@ type ServiceInfoResult struct {
 	Tables      []LayerRef `json:"tables" jsonschema:"non-spatial tables"`
 }
 
-func (t *Tools) serviceInfo(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, ServiceInfoResult, error) {
+func (t *Tools) serviceInfo(ctx context.Context, _ *mcp.CallToolRequest, in ServiceInfoInput) (*mcp.CallToolResult, ServiceInfoResult, error) {
 	info, err := t.client.ServiceInfo(ctx)
 	if err != nil {
 		return nil, ServiceInfoResult{}, err
+	}
+	needle := strings.ToLower(strings.TrimSpace(in.NameContains))
+	match := func(name string) bool {
+		return needle == "" || strings.Contains(strings.ToLower(name), needle)
 	}
 	out := ServiceInfoResult{
 		Description: info.ServiceDescription,
@@ -30,10 +40,14 @@ func (t *Tools) serviceInfo(ctx context.Context, _ *mcp.CallToolRequest, _ struc
 		Tables:      make([]LayerRef, 0, len(info.Tables)),
 	}
 	for _, l := range info.Layers {
-		out.Layers = append(out.Layers, LayerRef{ID: l.ID, Name: l.Name})
+		if match(l.Name) {
+			out.Layers = append(out.Layers, LayerRef{ID: l.ID, Name: l.Name})
+		}
 	}
 	for _, tbl := range info.Tables {
-		out.Tables = append(out.Tables, LayerRef{ID: tbl.ID, Name: tbl.Name})
+		if match(tbl.Name) {
+			out.Tables = append(out.Tables, LayerRef{ID: tbl.ID, Name: tbl.Name})
+		}
 	}
 	return nil, out, nil
 }
@@ -84,7 +98,7 @@ func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerI
 func (t *Tools) registerDiscovery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "service_info",
-		Description: "List the layers and tables published by the Cape Town Open Data Feature Service, with their IDs. Use this to discover what is queryable and to verify layer IDs.",
+		Description: "List the layers and tables published by the Cape Town Open Data Feature Service, with their IDs. Use this to discover what is queryable and to verify layer IDs. The service publishes 150+ layers; pass name_contains to filter the listing by name (e.g. \"water\").",
 	}, t.serviceInfo)
 
 	mcp.AddTool(s, &mcp.Tool{

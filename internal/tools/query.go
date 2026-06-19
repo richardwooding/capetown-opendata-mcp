@@ -21,6 +21,7 @@ type QueryLayerResult struct {
 	Count         int       `json:"count" jsonschema:"number of features returned (or total matching when count_only is true)"`
 	Features      []Feature `json:"features" jsonschema:"the returned features (empty when count_only is true)"`
 	ExceededLimit bool      `json:"exceeded_limit" jsonschema:"true if more features were available beyond the requested limit"`
+	NextOffset    *int      `json:"next_offset,omitempty" jsonschema:"offset to pass on the next call to fetch the following page; present only when exceeded_limit is true"`
 	CountOnly     bool      `json:"count_only" jsonschema:"echoes whether this was a count-only query"`
 }
 
@@ -34,7 +35,7 @@ func (t *Tools) queryLayer(ctx context.Context, _ *mcp.CallToolRequest, in Query
 		p := applyCommon(base, in.CommonQuery)
 		n, err := t.client.Count(ctx, p)
 		if err != nil {
-			return nil, QueryLayerResult{}, err
+			return nil, QueryLayerResult{}, annotateErr(err, in.LayerID)
 		}
 		return nil, QueryLayerResult{Count: n, Features: []Feature{}, CountOnly: true}, nil
 	}
@@ -46,6 +47,7 @@ func (t *Tools) queryLayer(ctx context.Context, _ *mcp.CallToolRequest, in Query
 		Count:         fr.Count,
 		Features:      fr.Features,
 		ExceededLimit: fr.ExceededLimit,
+		NextOffset:    fr.NextOffset,
 	}, nil
 }
 
