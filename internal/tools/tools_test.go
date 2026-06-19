@@ -240,6 +240,34 @@ func TestServiceInfoNameFilter(t *testing.T) {
 	}
 }
 
+func TestFieldValues(t *testing.T) {
+	var query string
+	body := `{"features":[
+		{"properties":{"OFC_SBRB_NAME":"ACACIA PARK"}},
+		{"properties":{"OFC_SBRB_NAME":"ADMIRALS PARK"}},
+		{"properties":{"OFC_SBRB_NAME":null}}
+	],"exceededTransferLimit":false}`
+	tools := New(capturingServerBody(t, &query, body))
+
+	_, res, err := tools.fieldValues(context.Background(), nil, FieldValuesInput{
+		LayerID: 56,
+		Field:   "OFC_SBRB_NAME",
+	})
+	if err != nil {
+		t.Fatalf("fieldValues: %v", err)
+	}
+	if !strings.Contains(query, "returnDistinctValues=true") {
+		t.Errorf("expected returnDistinctValues=true in query, got %q", query)
+	}
+	// Null values are dropped; two real suburb names remain.
+	if res.Count != 2 || len(res.Values) != 2 {
+		t.Fatalf("expected 2 distinct values, got %d: %v", res.Count, res.Values)
+	}
+	if res.Values[0] != "ACACIA PARK" {
+		t.Errorf("unexpected first value: %v", res.Values[0])
+	}
+}
+
 // TestRegisterAllTools ensures every tool's input/output schema can be inferred
 // and registered without panicking.
 func TestRegisterAllTools(t *testing.T) {

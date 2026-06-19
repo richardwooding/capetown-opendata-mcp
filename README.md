@@ -20,13 +20,16 @@ and attribute filtering, and in-memory response caching.
 | `water_quality` | Inland water quality sampling results, newest first. |
 | `public_lighting` | Public street lighting assets. |
 | `heritage_inventory` | Heritage inventory sites and features. |
-| `query_layer` | Generic query over any layer by ID (where/fields/order/bbox/count-only). |
-| `service_info` | List the service's layers and tables with their IDs. |
+| `query_layer` | Generic query over any layer by ID (where/fields/order/bbox/offset/count-only). |
+| `field_values` | List the distinct values of a field on a layer (discover valid filter values). |
+| `service_info` | List the service's layers and tables with their IDs; `name_contains` filters the listing. |
 | `layer_info` | Describe a layer's fields, geometry type, and page size. |
 
 Every feature-returning tool accepts a shared set of filters: `limit` (default 200, max 2000),
+`offset` (skip N features; pair with the `next_offset` in the response to page through a layer),
 `where` (extra SQL filter, AND-combined), `bbox` (`[minLon, minLat, maxLon, maxLat]` in WGS84),
-and `include_geometry` (default `false`).
+`include_geometry` (default `false`), and `omit_nulls` (drop null-valued attributes to shrink
+payloads).
 
 > **Note:** Published ArcGIS layer IDs occasionally drift. Use `service_info` / `layer_info` to
 > discover current IDs and field names, and `query_layer` to query a layer whose dedicated tool's
