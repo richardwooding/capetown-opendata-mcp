@@ -28,8 +28,10 @@ and attribute filtering, and in-memory response caching.
 Every feature-returning tool accepts a shared set of filters: `limit` (default 200, max 2000),
 `offset` (skip N features; pair with the `next_offset` in the response to page through a layer),
 `where` (extra SQL filter, AND-combined), `bbox` (`[minLon, minLat, maxLon, maxLat]` in WGS84),
-`include_geometry` (default `false`), and `omit_nulls` (drop null-valued attributes to shrink
-payloads).
+`polygon` (rings `[[[lon,lat],…],…]` in WGS84, for irregular areas like a ward boundary),
+`include_geometry` (default `false`), `omit_nulls` (drop null-valued attributes), and
+`use_aliases` (rename raw column names to their human-readable field aliases). Spatial filters are
+sent as WGS84 (`inSR=4326`), so they work against layers stored in any projection.
 
 > **Note:** Published ArcGIS layer IDs occasionally drift. Use `service_info` / `layer_info` to
 > discover current IDs and field names, and `query_layer` to query a layer whose dedicated tool's

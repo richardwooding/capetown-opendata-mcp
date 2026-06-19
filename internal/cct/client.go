@@ -7,7 +7,10 @@ package cct
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	capetown "github.com/richardwooding/capetown-opendata"
@@ -19,6 +22,11 @@ import (
 // BaseURL is the upstream Feature Service endpoint, re-exported for convenience.
 const BaseURL = capetown.BaseURL
 
+const (
+	defaultMaxRetries   = 2
+	defaultRetryBackoff = 300 * time.Millisecond
+)
+
 // Options configures a Client.
 type Options struct {
 	// Timeout bounds each HTTP request. Ignored when HTTPClient is set.
@@ -29,6 +37,13 @@ type Options struct {
 	CacheTTL time.Duration
 	// CacheCapacity bounds the number of cached entries (0 = unbounded).
 	CacheCapacity uint64
+	// MaxRetries is the number of extra attempts for a transient failure
+	// (timeout or HTTP 5xx). Zero uses a sensible default; negative disables
+	// retries. The live City service has variable latency, so a couple of
+	// retries smooths over transient hiccups.
+	MaxRetries int
+	// RetryBackoff is the base delay between retries (doubled each attempt).
+	RetryBackoff time.Duration
 	// HTTPClient overrides the default HTTP client (used by tests).
 	HTTPClient *http.Client
 	// BaseURL overrides the upstream endpoint (used by tests).
@@ -37,8 +52,10 @@ type Options struct {
 
 // Client wraps an *arcgis.Client with a TTL cache.
 type Client struct {
-	arc   *arcgis.Client
-	cache *cache.Cache
+	arc        *arcgis.Client
+	cache      *cache.Cache
+	maxRetries int
+	backoff    time.Duration
 }
 
 // New constructs a Client from Options.
@@ -57,10 +74,59 @@ func New(opts Options) *Client {
 	if base == "" {
 		base = capetown.BaseURL
 	}
-	return &Client{
-		arc:   arcgis.NewClient(base, aopts...),
-		cache: cache.New(opts.CacheTTL, opts.CacheCapacity),
+	retries := opts.MaxRetries
+	switch {
+	case retries < 0:
+		retries = 0
+	case retries == 0:
+		retries = defaultMaxRetries
 	}
+	backoff := opts.RetryBackoff
+	if backoff <= 0 {
+		backoff = defaultRetryBackoff
+	}
+	return &Client{
+		arc:        arcgis.NewClient(base, aopts...),
+		cache:      cache.New(opts.CacheTTL, opts.CacheCapacity),
+		maxRetries: retries,
+		backoff:    backoff,
+	}
+}
+
+// retry runs fn, retrying transient failures up to c.maxRetries times with
+// exponential backoff. It stops early if the context is done.
+func (c *Client) retry(ctx context.Context, fn func() error) error {
+	var err error
+	delay := c.backoff
+	for attempt := 0; ; attempt++ {
+		if err = fn(); err == nil || ctx.Err() != nil {
+			return err
+		}
+		if attempt >= c.maxRetries || !transient(err) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(delay):
+		}
+		delay *= 2
+	}
+}
+
+// transient reports whether err is worth retrying: a network timeout or an
+// HTTP 5xx from the upstream. Deterministic errors (4xx, bad field/where) are
+// not retried because they won't succeed on a second attempt.
+func transient(err error) bool {
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
+	s := err.Error()
+	return strings.Contains(s, "HTTP 5") ||
+		strings.Contains(s, "connection reset") ||
+		strings.Contains(s, "Client.Timeout") ||
+		strings.Contains(s, "context deadline exceeded")
 }
 
 // Close releases background resources held by the client's cache.
@@ -96,28 +162,36 @@ func (c *Client) QueryLimit(ctx context.Context, p arcgis.QueryParams, limit int
 // Count returns the number of features matching p.
 func (c *Client) Count(ctx context.Context, p arcgis.QueryParams) (int, error) {
 	return cache.Fetch(c.cache, cacheKey("count", p), func() (int, error) {
-		return c.arc.QueryCount(ctx, p)
+		var n int
+		err := c.retry(ctx, func() error { var e error; n, e = c.arc.QueryCount(ctx, p); return e })
+		return n, err
 	})
 }
 
 // ServiceInfo returns metadata for the feature service.
 func (c *Client) ServiceInfo(ctx context.Context) (*arcgis.ServiceInfo, error) {
 	return cache.Fetch(c.cache, "service-info", func() (*arcgis.ServiceInfo, error) {
-		return c.arc.ServiceInfo(ctx)
+		var info *arcgis.ServiceInfo
+		err := c.retry(ctx, func() error { var e error; info, e = c.arc.ServiceInfo(ctx); return e })
+		return info, err
 	})
 }
 
 // LayerInfo returns metadata for a single layer.
 func (c *Client) LayerInfo(ctx context.Context, layerID int) (*arcgis.LayerInfo, error) {
 	return cache.Fetch(c.cache, cacheKey("layer-info", arcgis.QueryParams{LayerID: layerID}), func() (*arcgis.LayerInfo, error) {
-		return c.arc.LayerInfo(ctx, layerID)
+		var info *arcgis.LayerInfo
+		err := c.retry(ctx, func() error { var e error; info, e = c.arc.LayerInfo(ctx, layerID); return e })
+		return info, err
 	})
 }
 
 // queryPage runs a single cached page query.
 func (c *Client) queryPage(ctx context.Context, p arcgis.QueryParams) (*arcgis.FeatureSet, error) {
 	return cache.Fetch(c.cache, cacheKey("page", p), func() (*arcgis.FeatureSet, error) {
-		return c.arc.Query(ctx, p)
+		var fs *arcgis.FeatureSet
+		err := c.retry(ctx, func() error { var e error; fs, e = c.arc.Query(ctx, p); return e })
+		return fs, err
 	})
 }
 

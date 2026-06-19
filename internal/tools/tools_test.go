@@ -276,3 +276,67 @@ func TestRegisterAllTools(t *testing.T) {
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.0"}, nil)
 	New(c).Register(s) // panics on invalid schema inference
 }
+
+func TestBBoxTaggedWGS84(t *testing.T) {
+	var query string
+	tools := New(capturingServer(t, &query))
+	if _, _, err := tools.loadShedding(context.Background(), nil, LoadSheddingInput{
+		CommonQuery: CommonQuery{BBox: []float64{18.3, -34.0, 18.6, -33.8}},
+	}); err != nil {
+		t.Fatalf("loadShedding: %v", err)
+	}
+	if !strings.Contains(query, "inSR=4326") {
+		t.Fatalf("bbox query must be tagged inSR=4326, got %q", query)
+	}
+}
+
+func TestPolygonFilter(t *testing.T) {
+	var query string
+	tools := New(capturingServer(t, &query))
+	ring := [][][]float64{{{18.4, -33.9}, {18.5, -33.9}, {18.5, -34.0}, {18.4, -33.9}}}
+	if _, _, err := tools.queryLayer(context.Background(), nil, QueryLayerInput{
+		LayerID: 3, CommonQuery: CommonQuery{Polygon: ring},
+	}); err != nil {
+		t.Fatalf("queryLayer: %v", err)
+	}
+	if !strings.Contains(query, "geometryType=esriGeometryPolygon") {
+		t.Fatalf("expected polygon geometry type, got %q", query)
+	}
+	if !strings.Contains(query, "inSR=4326") || !strings.Contains(query, "rings") {
+		t.Fatalf("expected inSR=4326 and rings geometry, got %q", query)
+	}
+}
+
+func TestUseAliases(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/query") {
+			fmt.Fprint(w, `{"features":[{"properties":{"OFC_SBRB_NAME":"Newlands","OBJECTID":1}}],"exceededTransferLimit":false}`)
+			return
+		}
+		fmt.Fprint(w, `{"id":56,"name":"Land Parcels","fields":[
+			{"name":"OFC_SBRB_NAME","type":"esriFieldTypeString","alias":"Official Suburb Name"},
+			{"name":"OBJECTID","type":"esriFieldTypeOID","alias":"OBJECTID"}
+		]}`)
+	}))
+	t.Cleanup(srv.Close)
+	c := cct.New(cct.Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	t.Cleanup(c.Close)
+	tools := New(c)
+
+	_, res, err := tools.landParcels(context.Background(), nil, LandParcelsInput{
+		CommonQuery: CommonQuery{UseAliases: true},
+	})
+	if err != nil {
+		t.Fatalf("landParcels: %v", err)
+	}
+	attrs := res.Features[0].Attributes
+	if _, ok := attrs["Official Suburb Name"]; !ok {
+		t.Errorf("expected aliased key 'Official Suburb Name', got %v", attrs)
+	}
+	if _, ok := attrs["OFC_SBRB_NAME"]; ok {
+		t.Errorf("raw column name should be replaced by alias: %v", attrs)
+	}
+	if _, ok := attrs["OBJECTID"]; !ok {
+		t.Errorf("fields whose alias equals their name should be unchanged: %v", attrs)
+	}
+}
