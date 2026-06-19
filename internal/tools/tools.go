@@ -6,8 +6,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	arcgis "github.com/richardwooding/go-arcgis"
@@ -31,7 +29,7 @@ func New(client *cct.Client) *Tools { return &Tools{client: client} }
 // CommonQuery holds filters shared by every feature-returning tool.
 type CommonQuery struct {
 	Limit           int       `json:"limit,omitempty" jsonschema:"maximum number of features to return (default 200, max 2000)"`
-	Where           string    `json:"where,omitempty" jsonschema:"additional ArcGIS SQL WHERE filter, AND-combined with the dataset's default filter (e.g. \"STAGE > 2\")"`
+	Where           string    `json:"where,omitempty" jsonschema:"additional ArcGIS SQL WHERE filter, AND-combined with the dataset's default filter (e.g. \"OBJECTID > 100\"); use layer_info to find valid field names"`
 	BBox            []float64 `json:"bbox,omitempty" jsonschema:"spatial bounding-box filter as [minLon, minLat, maxLon, maxLat] in WGS84 degrees"`
 	IncludeGeometry bool      `json:"include_geometry,omitempty" jsonschema:"include feature geometry in the response (default false, which yields smaller attribute-only payloads)"`
 }
@@ -105,12 +103,6 @@ func toResult(feats []arcgis.Feature, more, includeGeometry bool) FeatureResult 
 		out.Features = append(out.Features, fe)
 	}
 	return out
-}
-
-// eq builds an equality WHERE clause, escaping single quotes to avoid breaking
-// the SQL string (and trivial injection of the surrounding literal).
-func eq(field, value string) string {
-	return fmt.Sprintf("%s = '%s'", field, strings.ReplaceAll(value, "'", "''"))
 }
 
 // Register adds every tool to the server.

@@ -13,9 +13,8 @@ and attribute filtering, and in-memory response caching.
 
 | Tool | Description |
 | --- | --- |
-| `load_shedding_blocks` | Load shedding zone polygons; optional `stage` (1–8) filter. |
-| `service_requests` | Municipal service requests, newest first; optional `suburb` filter. |
-| `wards` | Municipal ward boundaries with councillor info. |
+| `load_shedding_blocks` | Load shedding block polygons (block geometry and ID). |
+| `wards` | Municipal ward boundaries (ward name, key, year). |
 | `land_parcels` | Cadastral land parcels (erven); optional `suburb` filter. |
 | `taxi_routes` | Registered minibus taxi routes. |
 | `water_quality` | Inland water quality sampling results, newest first. |

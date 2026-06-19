@@ -8,41 +8,15 @@ import (
 	arcgis "github.com/richardwooding/go-arcgis"
 )
 
-// Field names used to build dataset-specific filters.
-const (
-	fieldSuburb = "SUBURB"
-)
-
 // --- Load shedding ---
 
 // LoadSheddingInput is the input for the load_shedding_blocks tool.
 type LoadSheddingInput struct {
 	CommonQuery
-	Stage int `json:"stage,omitempty" jsonschema:"load shedding stage to filter by (1-8); omit for all stages"`
 }
 
 func (t *Tools) loadShedding(ctx context.Context, _ *mcp.CallToolRequest, in LoadSheddingInput) (*mcp.CallToolResult, FeatureResult, error) {
-	base := capetown.LoadSheddingBlocks()
-	if in.Stage > 0 {
-		base = capetown.LoadSheddingBlocksForStage(in.Stage)
-	}
-	return t.run(ctx, base, in.CommonQuery)
-}
-
-// --- Service requests ---
-
-// ServiceRequestsInput is the input for the service_requests tool.
-type ServiceRequestsInput struct {
-	CommonQuery
-	Suburb string `json:"suburb,omitempty" jsonschema:"suburb name to filter service requests by"`
-}
-
-func (t *Tools) serviceRequests(ctx context.Context, _ *mcp.CallToolRequest, in ServiceRequestsInput) (*mcp.CallToolResult, FeatureResult, error) {
-	base := capetown.ServiceRequests()
-	if in.Suburb != "" {
-		base = capetown.ServiceRequestsBySuburb(in.Suburb)
-	}
-	return t.run(ctx, base, in.CommonQuery)
+	return t.run(ctx, capetown.LoadSheddingBlocks(), in.CommonQuery)
 }
 
 // --- Wards ---
@@ -67,7 +41,7 @@ type LandParcelsInput struct {
 func (t *Tools) landParcels(ctx context.Context, _ *mcp.CallToolRequest, in LandParcelsInput) (*mcp.CallToolResult, FeatureResult, error) {
 	base := capetown.LandParcels()
 	if in.Suburb != "" {
-		base.Where = eq(fieldSuburb, in.Suburb)
+		base = capetown.LandParcelsBySuburb(in.Suburb)
 	}
 	return t.run(ctx, base, in.CommonQuery)
 }
@@ -118,17 +92,12 @@ func (t *Tools) heritageInventory(ctx context.Context, _ *mcp.CallToolRequest, i
 func (t *Tools) registerDatasets(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "load_shedding_blocks",
-		Description: "Load shedding (rolling blackout) zone polygons for the City of Cape Town. Optionally filter by stage (1-8) or suburb via the where filter.",
+		Description: "Load shedding (rolling blackout) block polygons for the City of Cape Town. The layer carries block geometry and a block ID only; use a where filter or bbox to narrow results.",
 	}, t.loadShedding)
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "service_requests",
-		Description: "Municipal service requests (faults/complaints), most recent first. Optionally filter by suburb.",
-	}, t.serviceRequests)
-
-	mcp.AddTool(s, &mcp.Tool{
 		Name:        "wards",
-		Description: "Municipal ward boundaries with ward number and councillor.",
+		Description: "Municipal ward boundaries with ward name, ward key, and year.",
 	}, t.wards)
 
 	mcp.AddTool(s, &mcp.Tool{
