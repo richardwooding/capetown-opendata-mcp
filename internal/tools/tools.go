@@ -30,12 +30,14 @@ func New(client *cct.Client) *Tools { return &Tools{client: client} }
 
 // CommonQuery holds filters shared by every feature-returning tool.
 type CommonQuery struct {
-	Limit           int       `json:"limit,omitempty" jsonschema:"maximum number of features to return (default 200, max 2000)"`
-	Offset          int       `json:"offset,omitempty" jsonschema:"number of features to skip before returning results; use the next_offset from a previous response to page through a layer"`
-	Where           string    `json:"where,omitempty" jsonschema:"additional ArcGIS SQL WHERE filter, AND-combined with the dataset's default filter (e.g. \"OBJECTID > 100\"); use layer_info to find valid field names"`
-	BBox            []float64 `json:"bbox,omitempty" jsonschema:"spatial bounding-box filter as [minLon, minLat, maxLon, maxLat] in WGS84 degrees"`
-	IncludeGeometry bool      `json:"include_geometry,omitempty" jsonschema:"include feature geometry in the response (default false, which yields smaller attribute-only payloads)"`
-	OmitNulls       bool      `json:"omit_nulls,omitempty" jsonschema:"drop attributes whose value is null from each returned feature, yielding smaller payloads"`
+	Limit           int           `json:"limit,omitempty" jsonschema:"maximum number of features to return (default 200, max 2000)"`
+	Offset          int           `json:"offset,omitempty" jsonschema:"number of features to skip before returning results; use the next_offset from a previous response to page through a layer"`
+	Where           string        `json:"where,omitempty" jsonschema:"additional ArcGIS SQL WHERE filter, AND-combined with the dataset's default filter (e.g. \"OBJECTID > 100\"); use layer_info to find valid field names"`
+	BBox            []float64     `json:"bbox,omitempty" jsonschema:"spatial bounding-box filter as [minLon, minLat, maxLon, maxLat] in WGS84 degrees"`
+	Polygon         [][][]float64 `json:"polygon,omitempty" jsonschema:"spatial filter as polygon rings [[[lon,lat],...],...] in WGS84; returns features intersecting the polygon. An alternative to bbox for irregular areas such as a ward boundary; if both are given, bbox is used"`
+	IncludeGeometry bool          `json:"include_geometry,omitempty" jsonschema:"include feature geometry in the response (default false, which yields smaller attribute-only payloads)"`
+	OmitNulls       bool          `json:"omit_nulls,omitempty" jsonschema:"drop attributes whose value is null from each returned feature, yielding smaller payloads"`
+	UseAliases      bool          `json:"use_aliases,omitempty" jsonschema:"rename each attribute from its raw column name to its human-readable field alias (from layer_info); makes cryptic field names readable"`
 }
 
 // Feature is a single returned feature.
@@ -60,11 +62,47 @@ func (t *Tools) run(ctx context.Context, base arcgis.QueryParams, c CommonQuery)
 		return nil, FeatureResult{}, annotateErr(err, base.LayerID)
 	}
 	res := toResult(feats, more, c.IncludeGeometry, c.OmitNulls)
+	if c.UseAliases {
+		t.applyAliases(ctx, base.LayerID, res.Features)
+	}
 	if more {
 		next := c.Offset + res.Count
 		res.NextOffset = &next
 	}
 	return nil, res, nil
+}
+
+// applyAliases rewrites each feature's attribute keys from raw column names to
+// their human-readable field aliases, looked up from the (cached) layer schema.
+// Best-effort: if the schema can't be fetched, attributes are left unchanged.
+func (t *Tools) applyAliases(ctx context.Context, layerID int, feats []Feature) {
+	info, err := t.client.LayerInfo(ctx, layerID)
+	if err != nil {
+		return
+	}
+	alias := make(map[string]string, len(info.Fields))
+	for _, f := range info.Fields {
+		if f.Alias != "" && f.Alias != f.Name {
+			alias[f.Name] = f.Alias
+		}
+	}
+	if len(alias) == 0 {
+		return
+	}
+	for i := range feats {
+		if feats[i].Attributes == nil {
+			continue
+		}
+		renamed := make(map[string]any, len(feats[i].Attributes))
+		for k, v := range feats[i].Attributes {
+			if a, ok := alias[k]; ok {
+				renamed[a] = v
+			} else {
+				renamed[k] = v
+			}
+		}
+		feats[i].Attributes = renamed
+	}
 }
 
 // applyCommon overlays CommonQuery filters onto a base query.
@@ -78,6 +116,8 @@ func applyCommon(p arcgis.QueryParams, c CommonQuery) arcgis.QueryParams {
 	}
 	if len(c.BBox) == 4 {
 		p.Envelope = &arcgis.Envelope{MinX: c.BBox[0], MinY: c.BBox[1], MaxX: c.BBox[2], MaxY: c.BBox[3]}
+	} else if len(c.Polygon) > 0 {
+		p.Polygon = &arcgis.Polygon{Rings: c.Polygon}
 	}
 	if c.Offset > 0 {
 		p.ResultOffset = c.Offset

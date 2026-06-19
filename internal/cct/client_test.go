@@ -141,3 +141,48 @@ func TestAPIErrorSurfaced(t *testing.T) {
 		t.Fatalf("error should surface upstream message, got %v", err)
 	}
 }
+
+func TestRetryRecoversFromTransient(t *testing.T) {
+	var hits atomic.Int32
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if hits.Add(1) == 1 {
+			http.Error(w, "upstream busy", http.StatusServiceUnavailable) // 503 -> transient
+			return
+		}
+		fmt.Fprint(w, `{"features":[{"properties":{"id":1}}],"exceededTransferLimit":false}`)
+	})
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	c := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), RetryBackoff: time.Millisecond, MaxRetries: 3})
+	t.Cleanup(c.Close)
+
+	feats, _, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 1}, 10)
+	if err != nil {
+		t.Fatalf("QueryLimit after retry: %v", err)
+	}
+	if len(feats) != 1 {
+		t.Fatalf("want 1 feature after retry, got %d", len(feats))
+	}
+	if got := hits.Load(); got < 2 {
+		t.Fatalf("expected a retry (>=2 hits), got %d", got)
+	}
+}
+
+func TestNoRetryOnClientError(t *testing.T) {
+	var hits atomic.Int32
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		http.Error(w, "bad field", http.StatusBadRequest) // 400 -> deterministic, no retry
+	})
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	c := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), RetryBackoff: time.Millisecond, MaxRetries: 3})
+	t.Cleanup(c.Close)
+
+	if _, _, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 1}, 10); err == nil {
+		t.Fatal("expected an error for HTTP 400")
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("400 should not be retried, got %d hits", got)
+	}
+}
