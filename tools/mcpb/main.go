@@ -95,6 +95,10 @@ func manifestPlatform(goos string) string {
 func buildManifest(goos, version string) Manifest {
 	binName := binaryName(goos)
 	entry := "server/" + binName
+	// The command must be an absolute path; ${__dirname} expands to the
+	// installed bundle directory at runtime. A relative command (e.g.
+	// "server/...") is not resolved against the bundle dir and fails to spawn.
+	cmd := "${__dirname}/" + entry
 
 	m := Manifest{
 		ManifestVersion: "0.3",
@@ -107,7 +111,7 @@ func buildManifest(goos, version string) Manifest {
 			Type:       "binary",
 			EntryPoint: entry,
 			MCPConfig: MCPConfig{
-				Command: entry,
+				Command: cmd,
 				Args: []string{
 					"--transport", "stdio",
 					"--timeout", "${user_config.timeout}",
@@ -145,7 +149,7 @@ func buildManifest(goos, version string) Manifest {
 	// the intent explicit and matches the manifest spec's binary example.
 	if goos == "windows" {
 		m.Server.PlatformOverrides = map[string]PlatformOverride{
-			"win32": {Command: entry},
+			"win32": {Command: cmd},
 		}
 	}
 	return m
