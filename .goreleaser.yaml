@@ -24,6 +24,19 @@ builds:
       - -X main.version={{ .Version }}
       - -X main.commit={{ .Commit }}
       - -X main.date={{ .Date }}
+    hooks:
+      # After each binary is built, pack it into an Anthropic MCP Bundle
+      # (.mcpb) for Claude Desktop. Runs once per target with that target's
+      # binary path/os/arch; each .mcpb filename is unique so parallel targets
+      # don't collide. The packer is pure Go (no Node), so this works on any host.
+      post:
+        - cmd: >-
+            go run ./tools/mcpb pack
+            -binary {{ .Path }}
+            -os {{ .Os }}
+            -arch {{ .Arch }}
+            -version {{ .Version }}
+            -out dist/{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.mcpb
 
 archives:
   - id: default
@@ -101,3 +114,6 @@ homebrew_casks:
 
 release:
   prerelease: auto
+  # Attach the MCP Bundles produced by the build post-hook to this same release.
+  extra_files:
+    - glob: dist/*.mcpb
