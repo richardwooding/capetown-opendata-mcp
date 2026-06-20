@@ -67,8 +67,8 @@ func New(opts Options) *Client {
 	case opts.Timeout > 0:
 		aopts = append(aopts, arcgis.WithTimeout(opts.Timeout))
 	}
-	if opts.Token != "" {
-		aopts = append(aopts, arcgis.WithToken(opts.Token))
+	if t := usableToken(opts.Token); t != "" {
+		aopts = append(aopts, arcgis.WithToken(t))
 	}
 	base := opts.BaseURL
 	if base == "" {
@@ -127,6 +127,17 @@ func transient(err error) bool {
 		strings.Contains(s, "connection reset") ||
 		strings.Contains(s, "Client.Timeout") ||
 		strings.Contains(s, "context deadline exceeded")
+}
+
+// usableToken returns the ArcGIS token to use, or "" if it should be ignored.
+// A blank, whitespace-only, or unsubstituted "${...}" placeholder (e.g. an MCP
+// Bundle user_config value left empty) counts as no token.
+func usableToken(tok string) string {
+	t := strings.TrimSpace(tok)
+	if strings.HasPrefix(t, "${") && strings.HasSuffix(t, "}") {
+		return ""
+	}
+	return t
 }
 
 // Close releases background resources held by the client's cache.
