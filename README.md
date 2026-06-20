@@ -39,6 +39,14 @@ sent as WGS84 (`inSR=4326`), so they work against layers stored in any projectio
 
 ## Install
 
+### MCP Bundle (Claude Desktop, one-click)
+
+Every [release](https://github.com/richardwooding/capetown-opendata-mcp/releases) attaches
+**MCP Bundles** (`.mcpb`) — one per platform. Download the bundle matching your OS and
+architecture (e.g. `capetown-opendata-mcp_<version>_darwin_arm64.mcpb`) and open it with
+Claude Desktop to install. The bundle's settings screen lets you set an optional ArcGIS
+token, request timeout, and cache TTL.
+
 ### Homebrew (macOS / Linux)
 
 ```sh
@@ -112,11 +120,26 @@ Pushing a `vX.Y.Z` tag triggers the release workflow, which uses
 [GoReleaser](https://goreleaser.com) to:
 
 - build binaries for linux/darwin/windows (amd64 + arm64),
+- pack each binary into an **MCP Bundle** (`.mcpb`) and attach all six to the release,
 - build and push a multi-arch OCI image to GHCR with [ko](https://ko.build),
 - publish a Homebrew **cask** to [`richardwooding/homebrew-tap`](https://github.com/richardwooding/homebrew-tap).
 
 The release requires a `HOMEBREW_TAP_GITHUB_TOKEN` repository secret (a PAT with `repo` scope on
 the tap). GHCR uses the built-in `GITHUB_TOKEN`.
+
+### MCP Bundles
+
+`tools/mcpb` is a small, dependency-free (Go stdlib) packer that zips the server binary and a
+generated `manifest.json` into a `.mcpb`. GoReleaser invokes it per build target, but you can
+build a bundle for your current platform locally (no Node required):
+
+```sh
+go build -o capetown-opendata-mcp .
+go run ./tools/mcpb pack -version dev
+```
+
+Because the manifest format selects a binary by OS only (not architecture), each release ships
+one bundle per OS+arch.
 
 ## License
 
