@@ -233,3 +233,41 @@ func TestQueryLimitDeduplicatesAcrossPages(t *testing.T) {
 		t.Fatalf("expected OBJECTID appended to orderByFields, got %q", lastQuery)
 	}
 }
+
+func TestTokenBlankTreatedAsAbsent(t *testing.T) {
+	cases := []struct {
+		name      string
+		token     string
+		wantToken bool
+	}{
+		{"empty", "", false},
+		{"whitespace", "   ", false},
+		{"unsubstituted placeholder", "${user_config.arcgis_token}", false},
+		{"real token", "real-token", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var query string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/query") {
+					query = r.URL.RawQuery
+				}
+				fmt.Fprint(w, `{"features":[],"exceededTransferLimit":false}`)
+			}))
+			t.Cleanup(srv.Close)
+			c := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), Token: tc.token})
+			t.Cleanup(c.Close)
+
+			if _, _, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 7}, 10); err != nil {
+				t.Fatalf("QueryLimit: %v", err)
+			}
+			hasToken := strings.Contains(query, "token=")
+			if hasToken != tc.wantToken {
+				t.Fatalf("token in query = %v, want %v (query %q)", hasToken, tc.wantToken, query)
+			}
+			if tc.wantToken && !strings.Contains(query, "token=real-token") {
+				t.Fatalf("expected token=real-token, got %q", query)
+			}
+		})
+	}
+}
