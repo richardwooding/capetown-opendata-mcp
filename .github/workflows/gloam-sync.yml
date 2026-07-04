@@ -1,5 +1,8 @@
 # Scheduled gloam sync — opens a PR when the vendored gloam.css/gloam.js
 # drift from upstream (github.com/richardwooding/gloam@main).
+#
+# Copy this into a consumer's .github/workflows/ and set GLOAM_DIR to the
+# directory that holds gloam.css/gloam.js (e.g. "site" or "docs").
 name: gloam-sync
 
 on:
@@ -18,7 +21,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Sync gloam assets
         run: sh "$GLOAM_DIR/sync-gloam.sh" "$GLOAM_DIR"
