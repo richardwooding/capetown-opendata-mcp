@@ -22,6 +22,10 @@ BASE="https://raw.githubusercontent.com/${REPO}"
 
 [ -d "$TARGET" ] || { echo "sync-gloam: target dir not found: $TARGET" >&2; exit 1; }
 
+# Never leave half-downloaded .tmp files behind if the script is interrupted
+# or a download fails midway.
+trap 'rm -f "$TARGET"/gloam.css.tmp "$TARGET"/gloam.js.tmp' EXIT INT TERM
+
 # Resolve the ref to a commit SHA so both files come from one commit (no race
 # if the branch moves mid-sync). Query the exact ref paths so we don't match
 # other refs merely ending in $REF, and take the last line so an annotated tag
