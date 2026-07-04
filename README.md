@@ -9,6 +9,8 @@ It wraps [`capetown-opendata`](https://github.com/richardwooding/capetown-openda
 Service into a set of LLM-callable tools with discovery, a generic query escape hatch, spatial
 and attribute filtering, and in-memory response caching.
 
+**Website:** [richardwooding.github.io/capetown-opendata-mcp](https://richardwooding.github.io/capetown-opendata-mcp/)
+
 ## Tools
 
 | Tool | Description |
