@@ -10,7 +10,8 @@ import (
 // QueryLayerInput is the input for the generic query_layer tool.
 type QueryLayerInput struct {
 	CommonQuery
-	LayerID   int      `json:"layer_id" jsonschema:"the ArcGIS layer ID to query; use service_info to discover available layer IDs"`
+	Service   string   `json:"service" jsonschema:"the ODP_SPLIT_* feature service that hosts the layer (e.g. \"ODP_SPLIT_5\"); use service_info to discover which service a layer lives on"`
+	LayerID   int      `json:"layer_id" jsonschema:"the layer ID within its service; use service_info to discover available service/layer_id pairs"`
 	Fields    []string `json:"fields,omitempty" jsonschema:"attribute field names to return; omit for all fields"`
 	OrderBy   []string `json:"order_by,omitempty" jsonschema:"fields to sort by, e.g. [\"CREATED_DATE DESC\"]"`
 	CountOnly bool     `json:"count_only,omitempty" jsonschema:"return only the matching feature count rather than the features"`
@@ -26,6 +27,9 @@ type QueryLayerResult struct {
 }
 
 func (t *Tools) queryLayer(ctx context.Context, _ *mcp.CallToolRequest, in QueryLayerInput) (*mcp.CallToolResult, QueryLayerResult, error) {
+	if err := validateService(in.Service); err != nil {
+		return nil, QueryLayerResult{}, err
+	}
 	base := arcgis.QueryParams{
 		LayerID:       in.LayerID,
 		Fields:        in.Fields,
@@ -33,13 +37,13 @@ func (t *Tools) queryLayer(ctx context.Context, _ *mcp.CallToolRequest, in Query
 	}
 	if in.CountOnly {
 		p := applyCommon(base, in.CommonQuery)
-		n, err := t.client.Count(ctx, p)
+		n, err := t.client.Count(ctx, in.Service, p)
 		if err != nil {
-			return nil, QueryLayerResult{}, annotateErr(err, in.LayerID)
+			return nil, QueryLayerResult{}, annotateErr(err, in.Service, in.LayerID)
 		}
 		return nil, QueryLayerResult{Count: n, Features: []Feature{}, CountOnly: true}, nil
 	}
-	_, fr, err := t.run(ctx, base, in.CommonQuery)
+	_, fr, err := t.run(ctx, in.Service, base, in.CommonQuery)
 	if err != nil {
 		return nil, QueryLayerResult{}, err
 	}
@@ -53,7 +57,8 @@ func (t *Tools) queryLayer(ctx context.Context, _ *mcp.CallToolRequest, in Query
 
 // FieldValuesInput is the input for the field_values tool.
 type FieldValuesInput struct {
-	LayerID int    `json:"layer_id" jsonschema:"the ArcGIS layer ID to query; use service_info to discover available layer IDs"`
+	Service string `json:"service" jsonschema:"the ODP_SPLIT_* feature service that hosts the layer (e.g. \"ODP_SPLIT_4\"); use service_info to discover it"`
+	LayerID int    `json:"layer_id" jsonschema:"the layer ID within its service; use service_info to discover available service/layer_id pairs"`
 	Field   string `json:"field" jsonschema:"the attribute field whose distinct values to list; use layer_info to find valid field names"`
 	Where   string `json:"where,omitempty" jsonschema:"optional ArcGIS SQL WHERE filter to scope the values (e.g. \"WARD_NAME = '21'\")"`
 	Limit   int    `json:"limit,omitempty" jsonschema:"maximum number of distinct values to return (default 200, max 2000)"`
@@ -68,6 +73,9 @@ type FieldValuesResult struct {
 }
 
 func (t *Tools) fieldValues(ctx context.Context, _ *mcp.CallToolRequest, in FieldValuesInput) (*mcp.CallToolResult, FieldValuesResult, error) {
+	if err := validateService(in.Service); err != nil {
+		return nil, FieldValuesResult{}, err
+	}
 	limit := effectiveLimit(in.Limit)
 	no := false
 	p := arcgis.QueryParams{
@@ -79,9 +87,9 @@ func (t *Tools) fieldValues(ctx context.Context, _ *mcp.CallToolRequest, in Fiel
 		PageSize:             limit,
 		Where:                in.Where,
 	}
-	feats, more, err := t.client.QueryLimit(ctx, p, limit)
+	feats, more, err := t.client.QueryLimit(ctx, in.Service, p, limit)
 	if err != nil {
-		return nil, FieldValuesResult{}, annotateErr(err, in.LayerID)
+		return nil, FieldValuesResult{}, annotateErr(err, in.Service, in.LayerID)
 	}
 	values := make([]any, 0, len(feats))
 	for _, f := range feats {
@@ -95,14 +103,14 @@ func (t *Tools) fieldValues(ctx context.Context, _ *mcp.CallToolRequest, in Fiel
 func (t *Tools) registerQuery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "query_layer",
-		Description: "Generic escape hatch to query any layer of the Cape Town Open Data Feature Service by its ID. " +
-			"Prefer the dedicated dataset tools when one exists. Use service_info and layer_info to discover layer IDs and field names " +
-			"(published layer IDs occasionally drift). Supports a SQL WHERE filter, field selection, ordering, a bounding box, offset pagination, and count-only mode.",
+		Description: "Generic escape hatch to query any layer of the Cape Town Open Data portal by its service and layer ID. " +
+			"Prefer the dedicated dataset tools when one exists. The portal is split across services named ODP_SPLIT_1..ODP_SPLIT_12; " +
+			"use service_info to discover which service and layer_id you need. Supports a SQL WHERE filter, field selection, ordering, a bounding box, offset pagination, and count-only mode.",
 	}, t.queryLayer)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "field_values",
 		Description: "List the distinct values of a field on a layer. Use this to discover valid filter values before " +
-			"querying — e.g. the suburb names available for land_parcels' suburb filter, or the set of ward names.",
+			"querying — e.g. the suburb names available for land_parcels' suburb filter, or the set of ward names. Requires the layer's service (see service_info).",
 	}, t.fieldValues)
 }
