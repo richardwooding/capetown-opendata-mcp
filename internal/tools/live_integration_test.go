@@ -68,110 +68,97 @@ func TestLiveDatasetTools(t *testing.T) {
 	tl := liveTools(t)
 	ctx := context.Background()
 	small := CommonQuery{Limit: 3}
-
-	t.Run("wards", func(t *testing.T) {
-		_, res, err := tl.wards(ctx, nil, WardsInput{CommonQuery: small})
-		if err != nil {
-			t.Fatalf("wards: %v", err)
-		}
-		if res.Count == 0 {
-			t.Fatal("expected some ward features")
-		}
-	})
-
-	t.Run("land_parcels_by_suburb", func(t *testing.T) {
-		_, res, err := tl.landParcels(ctx, nil, LandParcelsInput{Suburb: "Newlands", CommonQuery: small})
-		if err != nil {
-			t.Fatalf("land_parcels: %v", err)
-		}
-		if res.Count == 0 {
-			t.Fatal("expected Newlands parcels")
-		}
-	})
-
-	t.Run("heritage_inventory", func(t *testing.T) {
-		_, res, err := tl.heritageInventory(ctx, nil, HeritageInventoryInput{CommonQuery: small})
-		if err != nil {
-			t.Fatalf("heritage_inventory: %v", err)
-		}
-		if res.Count == 0 {
-			t.Fatal("expected heritage features")
-		}
-	})
-
-	t.Run("load_shedding_blocks", func(t *testing.T) {
-		if _, _, err := tl.loadShedding(ctx, nil, LoadSheddingInput{CommonQuery: small}); err != nil {
-			t.Fatalf("load_shedding_blocks: %v", err)
-		}
-	})
-
-	t.Run("public_lighting", func(t *testing.T) {
-		if _, _, err := tl.publicLighting(ctx, nil, PublicLightingInput{CommonQuery: small}); err != nil {
-			t.Fatalf("public_lighting: %v", err)
-		}
-	})
-
-	t.Run("taxi_routes", func(t *testing.T) {
-		if _, _, err := tl.taxiRoutes(ctx, nil, TaxiRoutesInput{CommonQuery: small}); err != nil {
-			t.Fatalf("taxi_routes: %v", err)
-		}
-	})
-
-	t.Run("water_quality", func(t *testing.T) {
-		_, res, err := tl.waterQuality(ctx, nil, WaterQualityInput{CommonQuery: small})
-		if err != nil {
-			t.Fatalf("water_quality: %v", err)
-		}
-		if res.Count == 0 {
-			t.Fatal("expected water quality rows")
-		}
-	})
+	cases := []struct {
+		name     string
+		run      func() (FeatureResult, error)
+		wantSome bool
+	}{
+		{"wards", func() (FeatureResult, error) { _, r, e := tl.wards(ctx, nil, WardsInput{CommonQuery: small}); return r, e }, true},
+		{"land_parcels_by_suburb", func() (FeatureResult, error) {
+			_, r, e := tl.landParcels(ctx, nil, LandParcelsInput{Suburb: "Newlands", CommonQuery: small})
+			return r, e
+		}, true},
+		{"heritage_inventory", func() (FeatureResult, error) {
+			_, r, e := tl.heritageInventory(ctx, nil, HeritageInventoryInput{CommonQuery: small})
+			return r, e
+		}, true},
+		{"load_shedding_blocks", func() (FeatureResult, error) {
+			_, r, e := tl.loadShedding(ctx, nil, LoadSheddingInput{CommonQuery: small})
+			return r, e
+		}, false},
+		{"public_lighting", func() (FeatureResult, error) {
+			_, r, e := tl.publicLighting(ctx, nil, PublicLightingInput{CommonQuery: small})
+			return r, e
+		}, false},
+		{"taxi_routes", func() (FeatureResult, error) {
+			_, r, e := tl.taxiRoutes(ctx, nil, TaxiRoutesInput{CommonQuery: small})
+			return r, e
+		}, false},
+		{"water_quality", func() (FeatureResult, error) {
+			_, r, e := tl.waterQuality(ctx, nil, WaterQualityInput{CommonQuery: small})
+			return r, e
+		}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := tc.run()
+			if err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if tc.wantSome && res.Count == 0 {
+				t.Fatalf("%s: expected at least one feature", tc.name)
+			}
+		})
+	}
 }
 
-// TestLiveGenericTools exercises layer_info, field_values, and query_layer with
-// an explicit service argument.
-func TestLiveGenericTools(t *testing.T) {
+// hasField reports whether a field named name is present in fields.
+func hasField(fields []FieldInfo, name string) bool {
+	for _, f := range fields {
+		if f.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// TestLiveLayerInfo describes the ward layer via the generic layer_info tool.
+func TestLiveLayerInfo(t *testing.T) {
 	tl := liveTools(t)
-	ctx := context.Background()
+	_, res, err := tl.layerInfo(context.Background(), nil, LayerInfoInput{Service: "ODP_SPLIT_5", LayerID: 6})
+	if err != nil {
+		t.Fatalf("layer_info: %v", err)
+	}
+	if res.Name != "Ward" {
+		t.Fatalf("expected Ward layer, got %q", res.Name)
+	}
+	if !hasField(res.Fields, "WARD_NAME") {
+		t.Error("expected WARD_NAME field on the ward layer")
+	}
+}
 
-	t.Run("layer_info", func(t *testing.T) {
-		_, res, err := tl.layerInfo(ctx, nil, LayerInfoInput{Service: "ODP_SPLIT_5", LayerID: 6})
-		if err != nil {
-			t.Fatalf("layer_info: %v", err)
-		}
-		if res.Name != "Ward" {
-			t.Fatalf("expected Ward layer, got %q", res.Name)
-		}
-		var hasWardName bool
-		for _, f := range res.Fields {
-			if f.Name == "WARD_NAME" {
-				hasWardName = true
-			}
-		}
-		if !hasWardName {
-			t.Error("expected WARD_NAME field on the ward layer")
-		}
-	})
+// TestLiveFieldValues lists distinct ward names via field_values.
+func TestLiveFieldValues(t *testing.T) {
+	tl := liveTools(t)
+	_, res, err := tl.fieldValues(context.Background(), nil, FieldValuesInput{Service: "ODP_SPLIT_5", LayerID: 6, Field: "WARD_NAME", Limit: 10})
+	if err != nil {
+		t.Fatalf("field_values: %v", err)
+	}
+	if res.Count == 0 {
+		t.Fatal("expected some distinct ward names")
+	}
+}
 
-	t.Run("field_values", func(t *testing.T) {
-		_, res, err := tl.fieldValues(ctx, nil, FieldValuesInput{Service: "ODP_SPLIT_5", LayerID: 6, Field: "WARD_NAME", Limit: 10})
-		if err != nil {
-			t.Fatalf("field_values: %v", err)
-		}
-		if res.Count == 0 {
-			t.Fatal("expected some distinct ward names")
-		}
-	})
-
-	t.Run("query_layer_count_only", func(t *testing.T) {
-		_, res, err := tl.queryLayer(ctx, nil, QueryLayerInput{Service: "ODP_SPLIT_5", LayerID: 6, CountOnly: true})
-		if err != nil {
-			t.Fatalf("query_layer count: %v", err)
-		}
-		if res.Count == 0 {
-			t.Fatal("expected a positive ward count")
-		}
-	})
+// TestLiveQueryLayerCount count-checks the ward layer via the generic tool.
+func TestLiveQueryLayerCount(t *testing.T) {
+	tl := liveTools(t)
+	_, res, err := tl.queryLayer(context.Background(), nil, QueryLayerInput{Service: "ODP_SPLIT_5", LayerID: 6, CountOnly: true})
+	if err != nil {
+		t.Fatalf("query_layer count: %v", err)
+	}
+	if res.Count == 0 {
+		t.Fatal("expected a positive ward count")
+	}
 }
 
 // TestLiveErrorPaths confirms the friendly error surfaces for bad inputs.
