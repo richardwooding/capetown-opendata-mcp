@@ -173,7 +173,8 @@ func TestOffsetAndNextOffset(t *testing.T) {
 	tools := New(capturingServerBody(t, &query, body))
 
 	_, res, err := tools.queryLayer(context.Background(), nil, QueryLayerInput{
-		LayerID:     138,
+		Service:     "ODP_SPLIT_7",
+		LayerID:     13,
 		CommonQuery: CommonQuery{Limit: 1, Offset: 5},
 	})
 	if err != nil {
@@ -193,50 +194,80 @@ func TestAnnotateErr(t *testing.T) {
 		err  error
 		want string
 	}{
-		{"400", fmt.Errorf("arcgis query layer 78: arcgis error 400: Unable to complete operation"), "layer_info(layer_id=78)"},
+		{"400", fmt.Errorf("arcgis query layer 78: arcgis error 400: Unable to complete operation"), "layer_id=78"},
 		{"timeout", fmt.Errorf("context deadline exceeded"), "smaller limit"},
+		{"5xx", fmt.Errorf("HTTP 500: <html>Service not started</html>"), "run service_info"},
 		{"other", fmt.Errorf("connection refused"), "connection refused"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := annotateErr(tc.err, 78).Error()
+			got := annotateErr(tc.err, "ODP_SPLIT_5", 78).Error()
 			if !strings.Contains(got, tc.want) {
 				t.Errorf("annotateErr = %q, want it to contain %q", got, tc.want)
 			}
 		})
 	}
-	if annotateErr(nil, 1) != nil {
+	// A hard 5xx must not leak the raw HTML body into the message.
+	if got := annotateErr(fmt.Errorf("HTTP 500: <html>boom</html>"), "ODP_SPLIT_5", 78).Error(); strings.Contains(got, "<html>") {
+		t.Errorf("5xx error should not embed the HTML body, got %q", got)
+	}
+	if annotateErr(nil, "ODP_SPLIT_5", 1) != nil {
 		t.Error("annotateErr(nil) should be nil")
 	}
 }
 
 func TestServiceInfoNameFilter(t *testing.T) {
-	var query string
+	// In override mode every split service resolves to this one server, so the
+	// aggregated listing repeats this body once per service. The test therefore
+	// asserts on the filter predicate and relative counts, not exact totals.
+	// A dedicated server (no shared lastQuery write) keeps the concurrent
+	// ServiceInfoAll fan-out race-free.
 	body := `{"serviceDescription":"svc","layers":[
-		{"id":3,"name":"Electricity Public Lighting"},
-		{"id":223,"name":"Routine Inland Water Quality Monitoring"},
-		{"id":78,"name":"Ward"}
-	],"tables":[{"id":229,"name":"Inland Water Quality Results (Raw)"}]}`
-	tools := New(capturingServerBody(t, &query, body))
+		{"id":1,"name":"Electricity Public Lighting"},
+		{"id":2,"name":"Routine Inland Water Quality Monitoring"},
+		{"id":6,"name":"Ward"}
+	],"tables":[{"id":12,"name":"Inland Water Quality Results (Raw)"}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	c := cct.New(cct.Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	t.Cleanup(c.Close)
+	tools := New(c)
 
 	_, res, err := tools.serviceInfo(context.Background(), nil, ServiceInfoInput{NameContains: "water"})
 	if err != nil {
 		t.Fatalf("serviceInfo: %v", err)
 	}
-	if len(res.Layers) != 1 || res.Layers[0].ID != 223 {
-		t.Fatalf("expected only the water layer, got %v", res.Layers)
+	if len(res.Layers) == 0 {
+		t.Fatal("expected at least one water entry")
 	}
-	if len(res.Tables) != 1 || res.Tables[0].ID != 229 {
-		t.Fatalf("expected the water table, got %v", res.Tables)
+	var sawMonitoring, sawTable bool
+	for _, l := range res.Layers {
+		if !strings.Contains(strings.ToLower(l.Name), "water") {
+			t.Fatalf("filtered result should contain 'water', got %q", l.Name)
+		}
+		if l.Name == "Routine Inland Water Quality Monitoring" {
+			sawMonitoring = true
+		}
+		if l.Name == "Inland Water Quality Results (Raw)" && l.IsTable {
+			sawTable = true
+		}
+	}
+	if !sawMonitoring || !sawTable {
+		t.Fatalf("expected both the water layer and the water table (tagged is_table), got %v", res.Layers)
+	}
+	if len(res.Unavailable) != 0 {
+		t.Fatalf("expected all services reachable in the test, got unavailable %v", res.Unavailable)
 	}
 
-	// No filter -> everything is returned.
+	// No filter -> strictly more entries (the non-water Ward + lighting appear).
 	_, all, err := tools.serviceInfo(context.Background(), nil, ServiceInfoInput{})
 	if err != nil {
 		t.Fatalf("serviceInfo (no filter): %v", err)
 	}
-	if len(all.Layers) != 3 || len(all.Tables) != 1 {
-		t.Fatalf("expected all layers/tables unfiltered, got %d layers %d tables", len(all.Layers), len(all.Tables))
+	if len(all.Layers) <= len(res.Layers) {
+		t.Fatalf("unfiltered listing (%d) should exceed the water-filtered one (%d)", len(all.Layers), len(res.Layers))
 	}
 }
 
@@ -250,7 +281,8 @@ func TestFieldValues(t *testing.T) {
 	tools := New(capturingServerBody(t, &query, body))
 
 	_, res, err := tools.fieldValues(context.Background(), nil, FieldValuesInput{
-		LayerID: 56,
+		Service: "ODP_SPLIT_4",
+		LayerID: 0,
 		Field:   "OFC_SBRB_NAME",
 	})
 	if err != nil {
@@ -295,7 +327,7 @@ func TestPolygonFilter(t *testing.T) {
 	tools := New(capturingServer(t, &query))
 	ring := [][][]float64{{{18.4, -33.9}, {18.5, -33.9}, {18.5, -34.0}, {18.4, -33.9}}}
 	if _, _, err := tools.queryLayer(context.Background(), nil, QueryLayerInput{
-		LayerID: 3, CommonQuery: CommonQuery{Polygon: ring},
+		Service: "ODP_SPLIT_1", LayerID: 1, CommonQuery: CommonQuery{Polygon: ring},
 	}); err != nil {
 		t.Fatalf("queryLayer: %v", err)
 	}

@@ -54,16 +54,17 @@ type FeatureResult struct {
 	NextOffset    *int      `json:"next_offset,omitempty" jsonschema:"offset to pass on the next call to fetch the following page; present only when exceeded_limit is true"`
 }
 
-// run applies the common filters to a base query, executes it, and shapes the result.
-func (t *Tools) run(ctx context.Context, base arcgis.QueryParams, c CommonQuery) (*mcp.CallToolResult, FeatureResult, error) {
+// run applies the common filters to a base query, executes it against the given
+// split service, and shapes the result.
+func (t *Tools) run(ctx context.Context, service string, base arcgis.QueryParams, c CommonQuery) (*mcp.CallToolResult, FeatureResult, error) {
 	p := applyCommon(base, c)
-	feats, more, err := t.client.QueryLimit(ctx, p, effectiveLimit(c.Limit))
+	feats, more, err := t.client.QueryLimit(ctx, service, p, effectiveLimit(c.Limit))
 	if err != nil {
-		return nil, FeatureResult{}, annotateErr(err, base.LayerID)
+		return nil, FeatureResult{}, annotateErr(err, service, base.LayerID)
 	}
 	res := toResult(feats, more, c.IncludeGeometry, c.OmitNulls)
 	if c.UseAliases {
-		t.applyAliases(ctx, base.LayerID, res.Features)
+		t.applyAliases(ctx, service, base.LayerID, res.Features)
 	}
 	if more {
 		next := c.Offset + res.Count
@@ -75,8 +76,8 @@ func (t *Tools) run(ctx context.Context, base arcgis.QueryParams, c CommonQuery)
 // applyAliases rewrites each feature's attribute keys from raw column names to
 // their human-readable field aliases, looked up from the (cached) layer schema.
 // Best-effort: if the schema can't be fetched, attributes are left unchanged.
-func (t *Tools) applyAliases(ctx context.Context, layerID int, feats []Feature) {
-	info, err := t.client.LayerInfo(ctx, layerID)
+func (t *Tools) applyAliases(ctx context.Context, service string, layerID int, feats []Feature) {
+	info, err := t.client.LayerInfo(ctx, service, layerID)
 	if err != nil {
 		return
 	}
@@ -176,7 +177,7 @@ func nonNullAttrs(attrs map[string]any) map[string]any {
 // annotateErr wraps an upstream query error with guidance the caller can act on.
 // The opaque ArcGIS messages ("Unable to complete operation") and bare timeouts
 // give no hint at the cause, so we classify the common cases.
-func annotateErr(err error, layerID int) error {
+func annotateErr(err error, service string, layerID int) error {
 	if err == nil {
 		return nil
 	}
@@ -184,10 +185,34 @@ func annotateErr(err error, layerID int) error {
 	switch {
 	case strings.Contains(s, "context deadline exceeded") || strings.Contains(s, "Client.Timeout"):
 		return fmt.Errorf("%w — the upstream service timed out; retry with a smaller limit or a bbox filter", err)
+	case strings.Contains(s, "HTTP 5") || strings.Contains(s, "arcgis error 5") || strings.Contains(s, "error 500"):
+		// Don't wrap: a hard 5xx body may be a large HTML error page.
+		return fmt.Errorf("the upstream Open Data service returned a server error; the %s service may be stopped or mid-restructure — run service_info to see which services are live", serviceLabel(service))
 	case strings.Contains(s, "arcgis error 400") || strings.Contains(s, "Unable to complete operation") || strings.Contains(s, "Invalid Layer"):
-		return fmt.Errorf("%w — the service rejected the query; a field name in where/fields/order_by may be invalid, or the layer ID may have drifted. Call layer_info(layer_id=%d) to list valid fields, or service_info to verify the layer ID", err, layerID)
+		return fmt.Errorf("%w — the service rejected the query; a field name in where/fields/order_by may be invalid, or the layer/service may have drifted. Call layer_info(service=%q, layer_id=%d) to list valid fields, or service_info to verify the layer", err, service, layerID)
 	}
 	return err
+}
+
+// serviceLabel renders a service name for an error message, tolerating a blank
+// (generic) service.
+func serviceLabel(service string) string {
+	if service == "" {
+		return "requested"
+	}
+	return service
+}
+
+// validateService rejects a missing or unknown split-service name with a hint
+// pointing at service_info, before an opaque upstream 404 can occur.
+func validateService(service string) error {
+	if strings.TrimSpace(service) == "" {
+		return fmt.Errorf("service is required; call service_info to find which ODP_SPLIT_* service hosts the layer you want")
+	}
+	if !cct.KnownService(service) {
+		return fmt.Errorf("unknown service %q; valid services are ODP_SPLIT_1 … ODP_SPLIT_12 — call service_info to list layers and their services", service)
+	}
+	return nil
 }
 
 // Register adds every tool to the server.

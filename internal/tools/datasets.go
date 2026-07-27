@@ -5,7 +5,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	capetown "github.com/richardwooding/capetown-opendata"
-	arcgis "github.com/richardwooding/go-arcgis"
 )
 
 // --- Load shedding ---
@@ -16,7 +15,8 @@ type LoadSheddingInput struct {
 }
 
 func (t *Tools) loadShedding(ctx context.Context, _ *mcp.CallToolRequest, in LoadSheddingInput) (*mcp.CallToolResult, FeatureResult, error) {
-	return t.run(ctx, capetown.LoadSheddingBlocks(), in.CommonQuery)
+	q := capetown.LoadSheddingBlocks()
+	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
 }
 
 // --- Wards ---
@@ -27,7 +27,8 @@ type WardsInput struct {
 }
 
 func (t *Tools) wards(ctx context.Context, _ *mcp.CallToolRequest, in WardsInput) (*mcp.CallToolResult, FeatureResult, error) {
-	return t.run(ctx, capetown.Wards(), in.CommonQuery)
+	q := capetown.Wards()
+	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
 }
 
 // --- Land parcels ---
@@ -39,11 +40,11 @@ type LandParcelsInput struct {
 }
 
 func (t *Tools) landParcels(ctx context.Context, _ *mcp.CallToolRequest, in LandParcelsInput) (*mcp.CallToolResult, FeatureResult, error) {
-	base := capetown.LandParcels()
+	q := capetown.LandParcels()
 	if in.Suburb != "" {
-		base = capetown.LandParcelsBySuburb(in.Suburb)
+		q = capetown.LandParcelsBySuburb(in.Suburb)
 	}
-	return t.run(ctx, base, in.CommonQuery)
+	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
 }
 
 // --- Taxi routes ---
@@ -54,7 +55,8 @@ type TaxiRoutesInput struct {
 }
 
 func (t *Tools) taxiRoutes(ctx context.Context, _ *mcp.CallToolRequest, in TaxiRoutesInput) (*mcp.CallToolResult, FeatureResult, error) {
-	return t.run(ctx, capetown.TaxiRoutes(), in.CommonQuery)
+	q := capetown.TaxiRoutes()
+	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
 }
 
 // --- Water quality ---
@@ -65,10 +67,11 @@ type WaterQualityInput struct {
 }
 
 func (t *Tools) waterQuality(ctx context.Context, _ *mcp.CallToolRequest, in WaterQualityInput) (*mcp.CallToolResult, FeatureResult, error) {
-	return t.run(ctx, capetown.WaterQualityResults(), in.CommonQuery)
+	q := capetown.WaterQualityResults()
+	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
 }
 
-// --- Datasets without a dedicated constructor (queried via layer-ID constant) ---
+// --- Public lighting ---
 
 // PublicLightingInput is the input for the public_lighting tool.
 type PublicLightingInput struct {
@@ -76,8 +79,11 @@ type PublicLightingInput struct {
 }
 
 func (t *Tools) publicLighting(ctx context.Context, _ *mcp.CallToolRequest, in PublicLightingInput) (*mcp.CallToolResult, FeatureResult, error) {
-	return t.run(ctx, arcgis.QueryParams{LayerID: capetown.LayerPublicLighting}, in.CommonQuery)
+	q := capetown.PublicLighting()
+	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
 }
+
+// --- Heritage inventory ---
 
 // HeritageInventoryInput is the input for the heritage_inventory tool.
 type HeritageInventoryInput struct {
@@ -85,7 +91,8 @@ type HeritageInventoryInput struct {
 }
 
 func (t *Tools) heritageInventory(ctx context.Context, _ *mcp.CallToolRequest, in HeritageInventoryInput) (*mcp.CallToolResult, FeatureResult, error) {
-	return t.run(ctx, arcgis.QueryParams{LayerID: capetown.LayerHeritageInventory}, in.CommonQuery)
+	q := capetown.HeritageInventory()
+	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
 }
 
 // registerDatasets registers all per-dataset tools.
@@ -97,22 +104,22 @@ func (t *Tools) registerDatasets(s *mcp.Server) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "wards",
-		Description: "Municipal ward boundaries with ward name, ward key, and year.",
+		Description: "Municipal ward boundaries with ward name and year.",
 	}, t.wards)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "land_parcels",
-		Description: "Cadastral land parcel (erf) polygons with legal status and area. Optionally filter by suburb.",
+		Description: "Cadastral land parcel (erf) polygons with legal status, zoning, and suburb. Optionally filter by suburb.",
 	}, t.landParcels)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "taxi_routes",
-		Description: "Registered minibus taxi routes with origin/destination ranks and operator.",
+		Description: "Registered minibus taxi routes.",
 	}, t.taxiRoutes)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "water_quality",
-		Description: "Inland water quality sampling results, most recent first.",
+		Description: "Inland water quality sampling results (sample point, date, parameter, value), most recent first. This is a non-spatial table, so results carry no geometry.",
 	}, t.waterQuality)
 
 	mcp.AddTool(s, &mcp.Tool{

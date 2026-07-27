@@ -16,16 +16,16 @@ and attribute filtering, and in-memory response caching.
 | Tool | Description |
 | --- | --- |
 | `load_shedding_blocks` | Load shedding block polygons (block geometry and ID). |
-| `wards` | Municipal ward boundaries (ward name, key, year). |
-| `land_parcels` | Cadastral land parcels (erven); optional `suburb` filter. |
+| `wards` | Municipal ward boundaries (ward name, year). |
+| `land_parcels` | Cadastral land parcels (erven); optional `suburb` filter (case-insensitive). |
 | `taxi_routes` | Registered minibus taxi routes. |
-| `water_quality` | Inland water quality sampling results, newest first. |
+| `water_quality` | Inland water quality sampling results (a non-spatial table), newest first. |
 | `public_lighting` | Public street lighting assets. |
 | `heritage_inventory` | Heritage inventory sites and features. |
-| `query_layer` | Generic query over any layer by ID (where/fields/order/bbox/offset/count-only). |
-| `field_values` | List the distinct values of a field on a layer (discover valid filter values). |
-| `service_info` | List the service's layers and tables with their IDs; `name_contains` filters the listing. |
-| `layer_info` | Describe a layer's fields, geometry type, and page size. |
+| `query_layer` | Generic query over any layer by `service` + `layer_id` (where/fields/order/bbox/offset/count-only). |
+| `field_values` | List the distinct values of a field on a layer (`service` + `layer_id`); discover valid filter values. |
+| `service_info` | List every layer/table across all split services, each tagged with its host service; `name_contains` filters the listing. |
+| `layer_info` | Describe a layer's fields, geometry type, and page size (`service` + `layer_id`). |
 
 Every feature-returning tool accepts a shared set of filters: `limit` (default 200, max 2000),
 `offset` (skip N features; pair with the `next_offset` in the response to page through a layer),
@@ -35,9 +35,12 @@ Every feature-returning tool accepts a shared set of filters: `limit` (default 2
 `use_aliases` (rename raw column names to their human-readable field aliases). Spatial filters are
 sent as WGS84 (`inSR=4326`), so they work against layers stored in any projection.
 
-> **Note:** Published ArcGIS layer IDs occasionally drift. Use `service_info` / `layer_info` to
-> discover current IDs and field names, and `query_layer` to query a layer whose dedicated tool's
-> ID has changed.
+> **Note:** The City of Cape Town publishes its Open Data across a dozen split feature services
+> (`ODP_SPLIT_1` … `ODP_SPLIT_12`); a layer is addressed by both a `service` and a `layer_id`.
+> `service_info` aggregates all of them into one catalogue (each entry tagged with its host
+> service), and reports any split that is temporarily unavailable. Use it to discover the
+> `service` + `layer_id` to pass to `layer_info`, `field_values`, and `query_layer`. Published IDs
+> occasionally drift as the portal is republished, so prefer discovery over hard-coded IDs.
 
 ## Install
 

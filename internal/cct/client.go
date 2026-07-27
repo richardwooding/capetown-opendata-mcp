@@ -1,7 +1,12 @@
 // Package cct is a thin, cache-aware wrapper around the go-arcgis client scoped
-// to the City of Cape Town Open Data Feature Service. It centralises client
+// to the City of Cape Town Open Data feature services. It centralises client
 // construction, capped pagination, and response caching so the MCP tool layer
 // can stay declarative.
+//
+// The City spreads its Open Data layers across several themed split services
+// (ODP_SPLIT_*, see the capetown package), so every method takes the split
+// service name to address; the wrapper keeps one underlying *arcgis.Client per
+// service, built lazily.
 package cct
 
 import (
@@ -11,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	capetown "github.com/richardwooding/capetown-opendata"
@@ -18,9 +24,6 @@ import (
 
 	"github.com/richardwooding/capetown-opendata-mcp/internal/cache"
 )
-
-// BaseURL is the upstream Feature Service endpoint, re-exported for convenience.
-const BaseURL = capetown.BaseURL
 
 const (
 	defaultMaxRetries   = 2
@@ -46,13 +49,18 @@ type Options struct {
 	RetryBackoff time.Duration
 	// HTTPClient overrides the default HTTP client (used by tests).
 	HTTPClient *http.Client
-	// BaseURL overrides the upstream endpoint (used by tests).
+	// BaseURL overrides the upstream endpoint for EVERY service (used by
+	// tests to point all split services at a single test server). When empty,
+	// each service resolves to capetown.ServiceURL(service).
 	BaseURL string
 }
 
-// Client wraps an *arcgis.Client with a TTL cache.
+// Client wraps per-service *arcgis.Client instances behind a shared TTL cache.
 type Client struct {
-	arc        *arcgis.Client
+	newArc  func(service string) *arcgis.Client
+	mu      sync.Mutex
+	clients map[string]*arcgis.Client
+
 	cache      *cache.Cache
 	maxRetries int
 	backoff    time.Duration
@@ -70,9 +78,12 @@ func New(opts Options) *Client {
 	if t := usableToken(opts.Token); t != "" {
 		aopts = append(aopts, arcgis.WithToken(t))
 	}
-	base := opts.BaseURL
-	if base == "" {
-		base = capetown.BaseURL
+	override := opts.BaseURL
+	baseFor := func(service string) string {
+		if override != "" {
+			return override
+		}
+		return capetown.ServiceURL(service)
 	}
 	retries := opts.MaxRetries
 	switch {
@@ -86,11 +97,24 @@ func New(opts Options) *Client {
 		backoff = defaultRetryBackoff
 	}
 	return &Client{
-		arc:        arcgis.NewClient(base, aopts...),
+		newArc:     func(service string) *arcgis.Client { return arcgis.NewClient(baseFor(service), aopts...) },
+		clients:    make(map[string]*arcgis.Client),
 		cache:      cache.New(opts.CacheTTL, opts.CacheCapacity),
 		maxRetries: retries,
 		backoff:    backoff,
 	}
+}
+
+// arc returns the (lazily built, cached) underlying client for a split service.
+func (c *Client) arc(service string) *arcgis.Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if cl, ok := c.clients[service]; ok {
+		return cl
+	}
+	cl := c.newArc(service)
+	c.clients[service] = cl
+	return cl
 }
 
 // retry runs fn, retrying transient failures up to c.maxRetries times with
@@ -143,15 +167,16 @@ func usableToken(tok string) string {
 // Close releases background resources held by the client's cache.
 func (c *Client) Close() { c.cache.Stop() }
 
-// QueryLimit fetches up to limit features for p, paginating as needed. The
-// boolean return reports whether more features were available beyond the limit.
+// QueryLimit fetches up to limit features for p on the given split service,
+// paginating as needed. The boolean return reports whether more features were
+// available beyond the limit.
 //
 // ArcGIS only guarantees deterministic pagination when an orderByFields is
 // supplied. To make paging safe, the layer's object-ID field is appended as a
 // stable tiebreaker when one is available, and features are de-duplicated by
 // object ID across pages so an unstable upstream order can't yield duplicates.
-func (c *Client) QueryLimit(ctx context.Context, p arcgis.QueryParams, limit int) ([]arcgis.Feature, bool, error) {
-	oid := c.oidField(ctx, p.LayerID)
+func (c *Client) QueryLimit(ctx context.Context, service string, p arcgis.QueryParams, limit int) ([]arcgis.Feature, bool, error) {
+	oid := c.oidField(ctx, service, p.LayerID)
 	if oid != "" && !containsField(p.OrderByFields, oid) {
 		p.OrderByFields = append(append([]string{}, p.OrderByFields...), oid)
 	}
@@ -160,7 +185,7 @@ func (c *Client) QueryLimit(ctx context.Context, p arcgis.QueryParams, limit int
 	seen := make(map[any]struct{})
 	more := false
 	for {
-		fs, err := c.queryPage(ctx, p)
+		fs, err := c.queryPage(ctx, service, p)
 		if err != nil {
 			return nil, false, err
 		}
@@ -197,8 +222,8 @@ func (c *Client) QueryLimit(ctx context.Context, p arcgis.QueryParams, limit int
 
 // oidField returns the layer's object-ID field name, or "" if it can't be
 // determined. The result is derived from the cached layer schema.
-func (c *Client) oidField(ctx context.Context, layerID int) string {
-	info, err := c.LayerInfo(ctx, layerID)
+func (c *Client) oidField(ctx context.Context, service string, layerID int) string {
+	info, err := c.LayerInfo(ctx, service, layerID)
 	if err != nil {
 		return ""
 	}
@@ -225,44 +250,132 @@ func containsField(fields []string, name string) bool {
 	return false
 }
 
-// Count returns the number of features matching p.
-func (c *Client) Count(ctx context.Context, p arcgis.QueryParams) (int, error) {
-	return cache.Fetch(c.cache, cacheKey("count", p), func() (int, error) {
+// Count returns the number of features matching p on the given split service.
+func (c *Client) Count(ctx context.Context, service string, p arcgis.QueryParams) (int, error) {
+	return cache.Fetch(c.cache, cacheKey(service, "count", p), func() (int, error) {
 		var n int
-		err := c.retry(ctx, func() error { var e error; n, e = c.arc.QueryCount(ctx, p); return e })
+		err := c.retry(ctx, func() error { var e error; n, e = c.arc(service).QueryCount(ctx, p); return e })
 		return n, err
 	})
 }
 
-// ServiceInfo returns metadata for the feature service.
-func (c *Client) ServiceInfo(ctx context.Context) (*arcgis.ServiceInfo, error) {
-	return cache.Fetch(c.cache, "service-info", func() (*arcgis.ServiceInfo, error) {
+// ServiceInfo returns metadata for a single split feature service.
+func (c *Client) ServiceInfo(ctx context.Context, service string) (*arcgis.ServiceInfo, error) {
+	return cache.Fetch(c.cache, "service-info:"+service, func() (*arcgis.ServiceInfo, error) {
 		var info *arcgis.ServiceInfo
-		err := c.retry(ctx, func() error { var e error; info, e = c.arc.ServiceInfo(ctx); return e })
+		err := c.retry(ctx, func() error { var e error; info, e = c.arc(service).ServiceInfo(ctx); return e })
 		return info, err
 	})
 }
 
-// LayerInfo returns metadata for a single layer.
-func (c *Client) LayerInfo(ctx context.Context, layerID int) (*arcgis.LayerInfo, error) {
-	return cache.Fetch(c.cache, cacheKey("layer-info", arcgis.QueryParams{LayerID: layerID}), func() (*arcgis.LayerInfo, error) {
+// LayerInfo returns metadata for a single layer within a split service.
+func (c *Client) LayerInfo(ctx context.Context, service string, layerID int) (*arcgis.LayerInfo, error) {
+	return cache.Fetch(c.cache, cacheKey(service, "layer-info", arcgis.QueryParams{LayerID: layerID}), func() (*arcgis.LayerInfo, error) {
 		var info *arcgis.LayerInfo
-		err := c.retry(ctx, func() error { var e error; info, e = c.arc.LayerInfo(ctx, layerID); return e })
+		err := c.retry(ctx, func() error { var e error; info, e = c.arc(service).LayerInfo(ctx, layerID); return e })
 		return info, err
 	})
 }
 
-// queryPage runs a single cached page query.
-func (c *Client) queryPage(ctx context.Context, p arcgis.QueryParams) (*arcgis.FeatureSet, error) {
-	return cache.Fetch(c.cache, cacheKey("page", p), func() (*arcgis.FeatureSet, error) {
+// ServiceLayer identifies one layer or table within a split service.
+type ServiceLayer struct {
+	Service string `json:"service" jsonschema:"the ODP_SPLIT_* service that hosts this layer; pass it to layer_info/query_layer"`
+	ID      int    `json:"id" jsonschema:"the layer (or table) ID within its service"`
+	Name    string `json:"name" jsonschema:"the layer's human-readable name"`
+	IsTable bool   `json:"is_table,omitempty" jsonschema:"true when this is a non-spatial table rather than a feature layer"`
+}
+
+// UnavailableService records a split service that could not be listed (e.g. it
+// is stopped or mid-restructure upstream).
+type UnavailableService struct {
+	Service string `json:"service" jsonschema:"the service that could not be listed"`
+	Error   string `json:"error" jsonschema:"a short reason it was unavailable"`
+}
+
+// AggregatedServiceInfo is the merged layer listing across every split service.
+type AggregatedServiceInfo struct {
+	Layers      []ServiceLayer
+	Unavailable []UnavailableService
+}
+
+// ServiceInfoAll lists every layer and table across all split services,
+// tagging each with the service that hosts it. Services that cannot be listed
+// are recorded in Unavailable rather than failing the whole call, so a single
+// stopped split does not blind the caller to the rest of the portal.
+func (c *Client) ServiceInfoAll(ctx context.Context) AggregatedServiceInfo {
+	services := capetown.Services()
+	type slot struct {
+		layers  []ServiceLayer
+		unavail *UnavailableService
+	}
+	slots := make([]slot, len(services))
+	var wg sync.WaitGroup
+	for i, svc := range services {
+		wg.Add(1)
+		go func(i int, svc string) {
+			defer wg.Done()
+			info, err := c.ServiceInfo(ctx, svc)
+			if err != nil {
+				slots[i].unavail = &UnavailableService{Service: svc, Error: cleanErrMsg(err)}
+				return
+			}
+			for _, l := range info.Layers {
+				slots[i].layers = append(slots[i].layers, ServiceLayer{Service: svc, ID: l.ID, Name: l.Name})
+			}
+			for _, tb := range info.Tables {
+				slots[i].layers = append(slots[i].layers, ServiceLayer{Service: svc, ID: tb.ID, Name: tb.Name, IsTable: true})
+			}
+		}(i, svc)
+	}
+	wg.Wait()
+
+	var out AggregatedServiceInfo
+	for _, s := range slots {
+		out.Layers = append(out.Layers, s.layers...)
+		if s.unavail != nil {
+			out.Unavailable = append(out.Unavailable, *s.unavail)
+		}
+	}
+	return out
+}
+
+// KnownService reports whether name is one of the canonical split services.
+func KnownService(name string) bool {
+	for _, s := range capetown.Services() {
+		if s == name {
+			return true
+		}
+	}
+	return false
+}
+
+// cleanErrMsg collapses a raw upstream error (which may embed a large HTML body
+// on a hard 5xx) to a short, human-readable summary.
+func cleanErrMsg(err error) string {
+	s := err.Error()
+	if strings.Contains(s, "HTTP 5") || strings.Contains(s, "error 500") {
+		return "upstream server error (HTTP 5xx); the service may be stopped or mid-restructure"
+	}
+	if strings.Contains(s, "<html") || strings.Contains(s, "<HTML") {
+		return "upstream returned an error page (service may be unavailable)"
+	}
+	if len(s) > 200 {
+		return s[:200] + "…"
+	}
+	return s
+}
+
+// queryPage runs a single cached page query against a split service.
+func (c *Client) queryPage(ctx context.Context, service string, p arcgis.QueryParams) (*arcgis.FeatureSet, error) {
+	return cache.Fetch(c.cache, cacheKey(service, "page", p), func() (*arcgis.FeatureSet, error) {
 		var fs *arcgis.FeatureSet
-		err := c.retry(ctx, func() error { var e error; fs, e = c.arc.Query(ctx, p); return e })
+		err := c.retry(ctx, func() error { var e error; fs, e = c.arc(service).Query(ctx, p); return e })
 		return fs, err
 	})
 }
 
-// cacheKey derives a stable cache key from a prefix and query params.
-func cacheKey(prefix string, p arcgis.QueryParams) string {
+// cacheKey derives a stable cache key from a service, a prefix, and query params.
+func cacheKey(service, prefix string, p arcgis.QueryParams) string {
 	b, _ := json.Marshal(p)
-	return prefix + ":" + string(b)
+	return prefix + ":" + service + ":" + string(b)
 }

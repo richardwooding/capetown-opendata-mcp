@@ -33,7 +33,7 @@ func TestQueryLimitCapsResults(t *testing.T) {
 	})
 	c := newTestClient(t, h, 0)
 
-	feats, more, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 7}, 2)
+	feats, more, err := c.QueryLimit(context.Background(), "", arcgis.QueryParams{LayerID: 7}, 2)
 	if err != nil {
 		t.Fatalf("QueryLimit: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestQueryLimitPaginates(t *testing.T) {
 	})
 	c := newTestClient(t, h, 0)
 
-	feats, more, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 7}, 100)
+	feats, more, err := c.QueryLimit(context.Background(), "", arcgis.QueryParams{LayerID: 7}, 100)
 	if err != nil {
 		t.Fatalf("QueryLimit: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestCacheAvoidsSecondCall(t *testing.T) {
 	c := newTestClient(t, h, time.Minute)
 
 	for i := 0; i < 3; i++ {
-		if _, _, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 7}, 10); err != nil {
+		if _, _, err := c.QueryLimit(context.Background(), "", arcgis.QueryParams{LayerID: 7}, 10); err != nil {
 			t.Fatalf("QueryLimit: %v", err)
 		}
 	}
@@ -115,7 +115,7 @@ func TestCountAndReturnGeometryParams(t *testing.T) {
 	})
 	c := newTestClient(t, h, 0)
 
-	n, err := c.Count(context.Background(), arcgis.QueryParams{LayerID: 7})
+	n, err := c.Count(context.Background(), "", arcgis.QueryParams{LayerID: 7})
 	if err != nil {
 		t.Fatalf("Count: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestCountAndReturnGeometryParams(t *testing.T) {
 	}
 
 	no := false
-	if _, _, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 7, ReturnGeometry: &no}, 10); err != nil {
+	if _, _, err := c.QueryLimit(context.Background(), "", arcgis.QueryParams{LayerID: 7, ReturnGeometry: &no}, 10); err != nil {
 		t.Fatalf("QueryLimit: %v", err)
 	}
 	if !gotNoGeom {
@@ -142,7 +142,7 @@ func TestAPIErrorSurfaced(t *testing.T) {
 	})
 	c := newTestClient(t, h, 0)
 
-	_, _, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 999}, 10)
+	_, _, err := c.QueryLimit(context.Background(), "", arcgis.QueryParams{LayerID: 999}, 10)
 	if err == nil {
 		t.Fatal("want error from ArcGIS error envelope")
 	}
@@ -165,7 +165,7 @@ func TestRetryRecoversFromTransient(t *testing.T) {
 	c := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), RetryBackoff: time.Millisecond, MaxRetries: 3})
 	t.Cleanup(c.Close)
 
-	feats, _, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 1}, 10)
+	feats, _, err := c.QueryLimit(context.Background(), "", arcgis.QueryParams{LayerID: 1}, 10)
 	if err != nil {
 		t.Fatalf("QueryLimit after retry: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestNoRetryOnClientError(t *testing.T) {
 	c := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), RetryBackoff: time.Millisecond, MaxRetries: 3})
 	t.Cleanup(c.Close)
 
-	if _, _, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 1}, 10); err == nil {
+	if _, _, err := c.QueryLimit(context.Background(), "", arcgis.QueryParams{LayerID: 1}, 10); err == nil {
 		t.Fatal("expected an error for HTTP 400")
 	}
 	if got := hits.Load(); got != 1 {
@@ -218,7 +218,7 @@ func TestQueryLimitDeduplicatesAcrossPages(t *testing.T) {
 	})
 	c := newTestClient(t, h, 0)
 
-	feats, more, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 1}, 100)
+	feats, more, err := c.QueryLimit(context.Background(), "", arcgis.QueryParams{LayerID: 1}, 100)
 	if err != nil {
 		t.Fatalf("QueryLimit: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestTokenBlankTreatedAsAbsent(t *testing.T) {
 			c := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), Token: tc.token})
 			t.Cleanup(c.Close)
 
-			if _, _, err := c.QueryLimit(context.Background(), arcgis.QueryParams{LayerID: 7}, 10); err != nil {
+			if _, _, err := c.QueryLimit(context.Background(), "", arcgis.QueryParams{LayerID: 7}, 10); err != nil {
 				t.Fatalf("QueryLimit: %v", err)
 			}
 			hasToken := strings.Contains(query, "token=")

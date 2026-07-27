@@ -5,48 +5,31 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-)
 
-// LayerRef is a lightweight layer reference in a service listing.
-type LayerRef struct {
-	ID   int    `json:"id" jsonschema:"the layer ID used by query_layer and layer_info"`
-	Name string `json:"name" jsonschema:"the layer's display name"`
-}
+	"github.com/richardwooding/capetown-opendata-mcp/internal/cct"
+)
 
 // ServiceInfoInput is the input for the service_info tool.
 type ServiceInfoInput struct {
 	NameContains string `json:"name_contains,omitempty" jsonschema:"case-insensitive substring; when set, only layers and tables whose name contains it are returned"`
 }
 
-// ServiceInfoResult describes the feature service and its layers.
+// ServiceInfoResult is the merged layer catalogue across every split service.
 type ServiceInfoResult struct {
-	Description string     `json:"description" jsonschema:"the service description"`
-	Layers      []LayerRef `json:"layers" jsonschema:"queryable feature layers"`
-	Tables      []LayerRef `json:"tables" jsonschema:"non-spatial tables"`
+	Layers      []cct.ServiceLayer       `json:"layers" jsonschema:"all layers and tables across the ODP_SPLIT_* services, each tagged with the service that hosts it (feed service + id to layer_info and query_layer)"`
+	Unavailable []cct.UnavailableService `json:"unavailable,omitempty" jsonschema:"split services that could not be listed right now (e.g. stopped or mid-restructure upstream)"`
 }
 
 func (t *Tools) serviceInfo(ctx context.Context, _ *mcp.CallToolRequest, in ServiceInfoInput) (*mcp.CallToolResult, ServiceInfoResult, error) {
-	info, err := t.client.ServiceInfo(ctx)
-	if err != nil {
-		return nil, ServiceInfoResult{}, err
-	}
+	agg := t.client.ServiceInfoAll(ctx)
 	needle := strings.ToLower(strings.TrimSpace(in.NameContains))
-	match := func(name string) bool {
-		return needle == "" || strings.Contains(strings.ToLower(name), needle)
-	}
 	out := ServiceInfoResult{
-		Description: info.ServiceDescription,
-		Layers:      make([]LayerRef, 0, len(info.Layers)),
-		Tables:      make([]LayerRef, 0, len(info.Tables)),
+		Layers:      make([]cct.ServiceLayer, 0, len(agg.Layers)),
+		Unavailable: agg.Unavailable,
 	}
-	for _, l := range info.Layers {
-		if match(l.Name) {
-			out.Layers = append(out.Layers, LayerRef{ID: l.ID, Name: l.Name})
-		}
-	}
-	for _, tbl := range info.Tables {
-		if match(tbl.Name) {
-			out.Tables = append(out.Tables, LayerRef{ID: tbl.ID, Name: tbl.Name})
+	for _, l := range agg.Layers {
+		if needle == "" || strings.Contains(strings.ToLower(l.Name), needle) {
+			out.Layers = append(out.Layers, l)
 		}
 	}
 	return nil, out, nil
@@ -61,11 +44,13 @@ type FieldInfo struct {
 
 // LayerInfoInput is the input for the layer_info tool.
 type LayerInfoInput struct {
-	LayerID int `json:"layer_id" jsonschema:"the ArcGIS layer ID to describe"`
+	Service string `json:"service" jsonschema:"the ODP_SPLIT_* feature service that hosts the layer (e.g. \"ODP_SPLIT_5\"); use service_info to discover it"`
+	LayerID int    `json:"layer_id" jsonschema:"the layer ID within its service to describe"`
 }
 
 // LayerInfoResult describes a single layer's schema.
 type LayerInfoResult struct {
+	Service        string      `json:"service"`
 	ID             int         `json:"id"`
 	Name           string      `json:"name"`
 	Type           string      `json:"type"`
@@ -76,11 +61,15 @@ type LayerInfoResult struct {
 }
 
 func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerInfoInput) (*mcp.CallToolResult, LayerInfoResult, error) {
-	info, err := t.client.LayerInfo(ctx, in.LayerID)
-	if err != nil {
+	if err := validateService(in.Service); err != nil {
 		return nil, LayerInfoResult{}, err
 	}
+	info, err := t.client.LayerInfo(ctx, in.Service, in.LayerID)
+	if err != nil {
+		return nil, LayerInfoResult{}, annotateErr(err, in.Service, in.LayerID)
+	}
 	out := LayerInfoResult{
+		Service:        in.Service,
 		ID:             info.ID,
 		Name:           info.Name,
 		Type:           info.Type,
@@ -98,11 +87,11 @@ func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerI
 func (t *Tools) registerDiscovery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "service_info",
-		Description: "List the layers and tables published by the Cape Town Open Data Feature Service, with their IDs. Use this to discover what is queryable and to verify layer IDs. The service publishes 150+ layers; pass name_contains to filter the listing by name (e.g. \"water\").",
+		Description: "List every layer and table across the Cape Town Open Data portal, each tagged with the ODP_SPLIT_* service that hosts it. The portal is split across a dozen services; this aggregates them into one catalogue. Use it to discover the service + layer_id to pass to layer_info and query_layer. The portal publishes 150+ layers; pass name_contains to filter by name (e.g. \"water\").",
 	}, t.serviceInfo)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "layer_info",
-		Description: "Describe a single layer: its field names/types, geometry type, and maximum page size. Use this to learn which fields are valid for where/fields/order_by.",
+		Description: "Describe a single layer: its field names/types, geometry type, and maximum page size. Use this to learn which fields are valid for where/fields/order_by. Requires the layer's service (see service_info).",
 	}, t.layerInfo)
 }
