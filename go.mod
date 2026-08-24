@@ -1,6 +1,6 @@
 module github.com/richardwooding/capetown-opendata-mcp
 
-go 1.26
+go 1.27.0
 
 require (
 	github.com/jellydator/ttlcache/v3 v3.4.1
