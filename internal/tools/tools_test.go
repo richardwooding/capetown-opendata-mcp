@@ -57,7 +57,7 @@ func TestCommonWhereAndBBoxAndGeometryOmitted(t *testing.T) {
 	tools := New(capturingServer(t, &query))
 
 	_, res, err := tools.loadShedding(context.Background(), nil, LoadSheddingInput{
-		CommonQuery: CommonQuery{Where: "BlockID > 5", BBox: []float64{18.3, -34.0, 18.6, -33.8}},
+		Where: "BlockID > 5", BBox: []float64{18.3, -34.0, 18.6, -33.8},
 	})
 	if err != nil {
 		t.Fatalf("loadShedding: %v", err)
@@ -79,7 +79,7 @@ func TestIncludeGeometry(t *testing.T) {
 	tools := New(capturingServer(t, &query))
 
 	_, res, err := tools.wards(context.Background(), nil, WardsInput{
-		CommonQuery: CommonQuery{IncludeGeometry: true},
+		IncludeGeometry: true,
 	})
 	if err != nil {
 		t.Fatalf("wards: %v", err)
@@ -108,8 +108,8 @@ func TestLandParcelsSuburbAndUserWhere(t *testing.T) {
 	tools := New(capturingServer(t, &query))
 
 	if _, _, err := tools.landParcels(context.Background(), nil, LandParcelsInput{
-		Suburb:      "Newlands",
-		CommonQuery: CommonQuery{Where: "OBJECTID > 100"},
+		Suburb: "Newlands",
+		Where:  "OBJECTID > 100",
 	}); err != nil {
 		t.Fatalf("landParcels: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestOmitNulls(t *testing.T) {
 	tools := New(capturingServerBody(t, &query, body))
 
 	_, res, err := tools.heritageInventory(context.Background(), nil, HeritageInventoryInput{
-		CommonQuery: CommonQuery{OmitNulls: true},
+		OmitNulls: true,
 	})
 	if err != nil {
 		t.Fatalf("heritageInventory: %v", err)
@@ -173,9 +173,9 @@ func TestOffsetAndNextOffset(t *testing.T) {
 	tools := New(capturingServerBody(t, &query, body))
 
 	_, res, err := tools.queryLayer(context.Background(), nil, QueryLayerInput{
-		Service:     "ODP_SPLIT_7",
-		LayerID:     13,
-		CommonQuery: CommonQuery{Limit: 1, Offset: 5},
+		Service: "ODP_SPLIT_7",
+		LayerID: 13,
+		Limit:   1, Offset: 5,
 	})
 	if err != nil {
 		t.Fatalf("queryLayer: %v", err)
@@ -313,7 +313,7 @@ func TestBBoxTaggedWGS84(t *testing.T) {
 	var query string
 	tools := New(capturingServer(t, &query))
 	if _, _, err := tools.loadShedding(context.Background(), nil, LoadSheddingInput{
-		CommonQuery: CommonQuery{BBox: []float64{18.3, -34.0, 18.6, -33.8}},
+		BBox: []float64{18.3, -34.0, 18.6, -33.8},
 	}); err != nil {
 		t.Fatalf("loadShedding: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestPolygonFilter(t *testing.T) {
 	tools := New(capturingServer(t, &query))
 	ring := [][][]float64{{{18.4, -33.9}, {18.5, -33.9}, {18.5, -34.0}, {18.4, -33.9}}}
 	if _, _, err := tools.queryLayer(context.Background(), nil, QueryLayerInput{
-		Service: "ODP_SPLIT_1", LayerID: 1, CommonQuery: CommonQuery{Polygon: ring},
+		Service: "ODP_SPLIT_1", LayerID: 1, Polygon: ring,
 	}); err != nil {
 		t.Fatalf("queryLayer: %v", err)
 	}
@@ -356,7 +356,7 @@ func TestUseAliases(t *testing.T) {
 	tools := New(c)
 
 	_, res, err := tools.landParcels(context.Background(), nil, LandParcelsInput{
-		CommonQuery: CommonQuery{UseAliases: true},
+		UseAliases: true,
 	})
 	if err != nil {
 		t.Fatalf("landParcels: %v", err)

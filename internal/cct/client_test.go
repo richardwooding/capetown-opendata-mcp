@@ -46,14 +46,14 @@ func TestQueryLimitCapsResults(t *testing.T) {
 }
 
 func TestQueryLimitPaginates(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/query") {
 			// Layer-schema lookup (for the OID field); not a page fetch.
 			fmt.Fprint(w, `{"id":7,"fields":[]}`)
 			return
 		}
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		if r.URL.Query().Get("resultOffset") == "0" {
 			fmt.Fprint(w, `{"features":[{"properties":{"id":1}},{"properties":{"id":2}}],"exceededTransferLimit":true}`)
 			return
@@ -72,29 +72,29 @@ func TestQueryLimitPaginates(t *testing.T) {
 	if more {
 		t.Fatal("want more=false once the final page is reached")
 	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Fatalf("want 2 upstream page calls, got %d", got)
 	}
 }
 
 func TestCacheAvoidsSecondCall(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/query") {
 			fmt.Fprint(w, `{"id":7,"fields":[]}`) // OID schema lookup
 			return
 		}
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		fmt.Fprint(w, `{"features":[{"properties":{"id":1}}],"exceededTransferLimit":false}`)
 	})
 	c := newTestClient(t, h, time.Minute)
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if _, _, err := c.QueryLimit(context.Background(), "", arcgis.QueryParams{LayerID: 7}, 10); err != nil {
 			t.Fatalf("QueryLimit: %v", err)
 		}
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Fatalf("want 1 upstream page call with caching, got %d", got)
 	}
 }

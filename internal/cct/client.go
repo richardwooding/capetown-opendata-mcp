@@ -15,6 +15,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -341,12 +342,7 @@ func (c *Client) ServiceInfoAll(ctx context.Context) AggregatedServiceInfo {
 
 // KnownService reports whether name is one of the canonical split services.
 func KnownService(name string) bool {
-	for _, s := range capetown.Services() {
-		if s == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(capetown.Services(), name)
 }
 
 // cleanErrMsg collapses a raw upstream error (which may embed a large HTML body
