@@ -146,6 +146,12 @@ go run ./tools/mcpb pack -version dev
 Because the manifest format selects a binary by OS only (not architecture), each release ships
 one bundle per OS+arch.
 
+## Sponsor
+
+If this saves you time, you can [sponsor its maintenance](https://github.com/sponsors/richardwooding).
+Sponsorship pays for the unglamorous half — triage, dependency bumps, release plumbing — and is
+never a condition of getting help here.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
