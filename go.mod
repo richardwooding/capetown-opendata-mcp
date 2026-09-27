@@ -6,7 +6,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/richardwooding/capetown-opendata v0.2.0
-	github.com/richardwooding/go-arcgis v0.2.1
+	github.com/richardwooding/go-arcgis v0.3.0
 )
 
 require (
