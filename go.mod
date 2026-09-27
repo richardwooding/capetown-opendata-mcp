@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/jellydator/ttlcache/v3 v3.4.1
-	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/richardwooding/capetown-opendata v0.2.0
 	github.com/richardwooding/go-arcgis v0.2.1
 )
