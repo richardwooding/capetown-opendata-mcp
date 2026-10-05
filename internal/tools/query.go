@@ -10,7 +10,7 @@ import (
 // QueryLayerInput is the input for the generic query_layer tool.
 type QueryLayerInput struct {
 	CommonQuery
-	Service   string   `json:"service" jsonschema:"the ODP_SPLIT_* feature service that hosts the layer (e.g. \"ODP_SPLIT_5\"); use service_info to discover which service a layer lives on"`
+	Service   string   `json:"service" jsonschema:"the service that hosts the layer: an ODP_SPLIT_* service (e.g. \"ODP_SPLIT_5\"), SERVICE_REQUESTS or BUILDING_PLANS; use service_info to discover which service a layer lives on"`
 	LayerID   int      `json:"layer_id" jsonschema:"the layer ID within its service; use service_info to discover available service/layer_id pairs"`
 	Fields    []string `json:"fields,omitempty" jsonschema:"attribute field names to return; omit for all fields"`
 	OrderBy   []string `json:"order_by,omitempty" jsonschema:"fields to sort by, e.g. [\"CREATED_DATE DESC\"]"`
@@ -57,7 +57,7 @@ func (t *Tools) queryLayer(ctx context.Context, _ *mcp.CallToolRequest, in Query
 
 // FieldValuesInput is the input for the field_values tool.
 type FieldValuesInput struct {
-	Service string `json:"service" jsonschema:"the ODP_SPLIT_* feature service that hosts the layer (e.g. \"ODP_SPLIT_4\"); use service_info to discover it"`
+	Service string `json:"service" jsonschema:"the service that hosts the layer: an ODP_SPLIT_* service (e.g. \"ODP_SPLIT_4\"), SERVICE_REQUESTS or BUILDING_PLANS; use service_info to discover it"`
 	LayerID int    `json:"layer_id" jsonschema:"the layer ID within its service; use service_info to discover available service/layer_id pairs"`
 	Field   string `json:"field" jsonschema:"the attribute field whose distinct values to list; use layer_info to find valid field names"`
 	Where   string `json:"where,omitempty" jsonschema:"optional ArcGIS SQL WHERE filter to scope the values (e.g. \"WARD_NAME = '21'\")"`
@@ -104,7 +104,7 @@ func (t *Tools) registerQuery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "query_layer",
 		Description: "Generic escape hatch to query any layer of the Cape Town Open Data portal by its service and layer ID. " +
-			"Prefer the dedicated dataset tools when one exists. The portal is split across services named ODP_SPLIT_1..ODP_SPLIT_12; " +
+			"Prefer the dedicated dataset tools when one exists, and summarize_layer for counts. The portal is split across services named ODP_SPLIT_1..ODP_SPLIT_12, plus SERVICE_REQUESTS and BUILDING_PLANS hosted on ArcGIS Online; " +
 			"use service_info to discover which service and layer_id you need. Supports a SQL WHERE filter, field selection, ordering, a bounding box, offset pagination, and count-only mode.",
 	}, t.queryLayer)
 
@@ -113,4 +113,12 @@ func (t *Tools) registerQuery(s *mcp.Server) {
 		Description: "List the distinct values of a field on a layer. Use this to discover valid filter values before " +
 			"querying — e.g. the suburb names available for land_parcels' suburb filter, or the set of ward names. Requires the layer's service (see service_info).",
 	}, t.fieldValues)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "summarize_layer",
+		Description: "Aggregate any layer on the server side: counts, sums, averages, minimums and maximums, optionally grouped by fields. " +
+			"Use it instead of paging through rows whenever the question is \"how many\", \"which most\" or \"total\" — essential for the 5-million-row " +
+			"SERVICE_REQUESTS table. Example: service=SERVICE_REQUESTS, layer_id=0, group_by=[\"C3_Complaint_Type\"], " +
+			"where=\"Ward = '062' AND Created_On_Date >= DATE '2026-01-01'\". With no statistics it counts records per group, largest first.",
+	}, t.summarizeLayer)
 }

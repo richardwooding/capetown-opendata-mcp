@@ -207,10 +207,10 @@ func serviceLabel(service string) string {
 // pointing at service_info, before an opaque upstream 404 can occur.
 func validateService(service string) error {
 	if strings.TrimSpace(service) == "" {
-		return fmt.Errorf("service is required; call service_info to find which ODP_SPLIT_* service hosts the layer you want")
+		return fmt.Errorf("service is required; call service_info to find which service hosts the layer you want")
 	}
 	if !cct.KnownService(service) {
-		return fmt.Errorf("unknown service %q; valid services are ODP_SPLIT_1 … ODP_SPLIT_12 — call service_info to list layers and their services", service)
+		return fmt.Errorf("unknown service %q; valid services are ODP_SPLIT_1 … ODP_SPLIT_12, SERVICE_REQUESTS and BUILDING_PLANS — call service_info to list layers and their services", service)
 	}
 	return nil
 }

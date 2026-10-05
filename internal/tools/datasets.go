@@ -95,6 +95,42 @@ func (t *Tools) heritageInventory(ctx context.Context, _ *mcp.CallToolRequest, i
 	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
 }
 
+// --- ArcGIS Online tables ---
+
+// TableQuery holds the filters for non-spatial tables, which take no spatial
+// filter or geometry.
+type TableQuery struct {
+	Limit      int    `json:"limit,omitempty" jsonschema:"maximum number of rows to return (default 200, max 2000)"`
+	Offset     int    `json:"offset,omitempty" jsonschema:"number of rows to skip; use next_offset from a previous response to page"`
+	Where      string `json:"where,omitempty" jsonschema:"ArcGIS SQL WHERE filter; dates use DATE 'YYYY-MM-DD'; use layer_info for field names"`
+	OmitNulls  bool   `json:"omit_nulls,omitempty" jsonschema:"drop attributes whose value is null from each row"`
+	UseAliases bool   `json:"use_aliases,omitempty" jsonschema:"rename raw column names to their human-readable aliases"`
+}
+
+func (q TableQuery) common() CommonQuery {
+	return CommonQuery{Limit: q.Limit, Offset: q.Offset, Where: q.Where, OmitNulls: q.OmitNulls, UseAliases: q.UseAliases}
+}
+
+// ServiceRequestsInput is the input for the service_requests tool.
+type ServiceRequestsInput struct {
+	TableQuery
+}
+
+func (t *Tools) serviceRequests(ctx context.Context, _ *mcp.CallToolRequest, in ServiceRequestsInput) (*mcp.CallToolResult, FeatureResult, error) {
+	q := capetown.ServiceRequests()
+	return t.run(ctx, q.Service, q.Params, in.common())
+}
+
+// BuildingPlansInput is the input for the building_plan_approvals tool.
+type BuildingPlansInput struct {
+	TableQuery
+}
+
+func (t *Tools) buildingPlans(ctx context.Context, _ *mcp.CallToolRequest, in BuildingPlansInput) (*mcp.CallToolResult, FeatureResult, error) {
+	q := capetown.BuildingPlanApprovals()
+	return t.run(ctx, q.Service, q.Params, in.common())
+}
+
 // registerDatasets registers all per-dataset tools.
 func (t *Tools) registerDatasets(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
@@ -131,4 +167,20 @@ func (t *Tools) registerDatasets(s *mcp.Server) {
 		Name:        "heritage_inventory",
 		Description: "Heritage inventory sites and features.",
 	}, t.heritageInventory)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "service_requests",
+		Description: "Citizen service requests (C3 notifications) logged with the City since 2023, most recently loaded first: about 5 million rows, refreshed regularly. " +
+			"A non-spatial table with ward, suburb, sub-council, complaint type, work centre and created/completed dates. " +
+			"Ward is a zero-padded string (Ward = '062'); roughly a third of rows carry a placeholder ward such as '#', '000', '0' or 'MUL', or none. " +
+			"Filter dates with DATE 'YYYY-MM-DD'. For counts or rankings (e.g. top complaint types in a ward) use summarize_layer with service=SERVICE_REQUESTS, layer_id=0 rather than paging rows.",
+	}, t.serviceRequests)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "building_plan_approvals",
+		Description: "Building plan applications submitted to the City since 2014, newest submission first: about 250,000 rows. " +
+			"A non-spatial table with case type, suburb, erf number, plan category, work description, number of units, area and value of new work, " +
+			"submission and approval dates, and financial year. Ward_No is an integer (Ward_No = 62). " +
+			"Filter dates with DATE 'YYYY-MM-DD'. For totals or trends (e.g. approvals per financial year) use summarize_layer with service=BUILDING_PLANS, layer_id=0.",
+	}, t.buildingPlans)
 }

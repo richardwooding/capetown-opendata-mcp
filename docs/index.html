@@ -11,10 +11,10 @@
   })(window,document,'script','dataLayer','GTM-NB62JPNJ');</script>
   <!-- End Google Tag Manager -->
   <title>Cape Town Open Data · MCP server</title>
-  <meta name="description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding and 150+ ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
+  <meta name="description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding, service requests and 130+ ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Cape Town Open Data · MCP server">
-  <meta property="og:description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding and 150+ ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
+  <meta property="og:description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding, service requests and 130+ ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
   <meta property="og:url" content="https://richardwooding.github.io/capetown-opendata-mcp/">
   <meta property="og:site_name" content="Richard Wooding">
   <meta property="og:image" content="https://richardwooding.github.io/capetown-opendata-mcp/og.png">
@@ -23,7 +23,7 @@
   <meta property="og:image:alt" content="Cape Town Open Data · MCP server">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Cape Town Open Data · MCP server">
-  <meta name="twitter:description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding and 150+ ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
+  <meta name="twitter:description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding, service requests and 130+ ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
   <meta name="twitter:image" content="https://richardwooding.github.io/capetown-opendata-mcp/og.png">
   <link rel="canonical" href="https://richardwooding.github.io/capetown-opendata-mcp/">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23161b22'/%3E%3Crect x='5' y='12' width='3.5' height='7' rx='1' fill='%23a371f7'/%3E%3Crect x='10.25' y='8' width='3.5' height='11' rx='1' fill='%23bd93ff'/%3E%3Crect x='15.5' y='4' width='3.5' height='15' rx='1' fill='%23d2b3ff'/%3E%3C/svg%3E">
@@ -98,7 +98,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <span class="t">capetown-opendata-mcp</span>
           </div>
 <pre><span class="pr">$</span> capetown-opendata-mcp
-mcp server ready · <span class="loc">stdio · 11 tools · cache 5m</span>
+mcp server ready · <span class="loc">stdio · 14 tools · cache 5m</span>
 
 <span class="pr">›</span> water_quality <span class="loc">limit=3</span>
 <span class="hd">SITE               RESULT   SAMPLED</span>
@@ -119,11 +119,11 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
         <div class="gl-grid feat" style="margin-top:28px">
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span> Discovery</h3>
-            <p><code>service_info</code> and <code>layer_info</code> list and describe the 150+ published layers, their fields, geometry, and page size.</p>
+            <p><code>service_info</code> and <code>layer_info</code> list and describe the 130+ published layers across every service, their fields, geometry, and page size.</p>
           </div>
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> Generic query</h3>
-            <p><code>query_layer</code> is an escape hatch over any layer by ID — WHERE, field selection, ordering, bbox, count-only, and offset pagination.</p>
+            <p><code>query_layer</code> is an escape hatch over any layer by service and layer ID — WHERE, field selection, ordering, bbox, count-only, and offset pagination.</p>
           </div>
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span> Spatial &amp; attribute filters</h3>
@@ -148,22 +148,25 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
     <!-- TOOLS -->
     <section id="tools" class="gl-section">
       <div class="gl-wrap">
-        <p class="gl-eyebrow">eleven tools</p>
-        <h2>Datasets, discovery, and a generic query.</h2>
+        <p class="gl-eyebrow">fourteen tools</p>
+        <h2>Datasets, discovery, a generic query, and aggregation.</h2>
         <div class="gl-grid feat" style="margin-top:28px">
           <div class="gl-card"><h3><span class="tool-name">load_shedding_blocks</span></h3><p>Load shedding block polygons (block geometry and ID).</p></div>
-          <div class="gl-card"><h3><span class="tool-name">wards</span></h3><p>Municipal ward boundaries (ward name, key, year).</p></div>
+          <div class="gl-card"><h3><span class="tool-name">wards</span></h3><p>Municipal ward boundaries (ward name, year).</p></div>
           <div class="gl-card"><h3><span class="tool-name">land_parcels</span></h3><p>Cadastral land parcels (erven); optional <code>suburb</code> filter.</p></div>
           <div class="gl-card"><h3><span class="tool-name">taxi_routes</span></h3><p>Registered minibus taxi routes.</p></div>
           <div class="gl-card"><h3><span class="tool-name">water_quality</span></h3><p>Inland water quality sampling results, newest first.</p></div>
           <div class="gl-card"><h3><span class="tool-name">public_lighting</span></h3><p>Public street lighting assets.</p></div>
           <div class="gl-card"><h3><span class="tool-name">heritage_inventory</span></h3><p>Heritage inventory sites and features.</p></div>
-          <div class="gl-card"><h3><span class="tool-name">query_layer</span></h3><p>Generic query over any layer by ID — where / fields / order / bbox / offset / count-only.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">service_requests</span></h3><p>Citizen service requests since 2023, about 5 million rows on ArcGIS Online.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">building_plan_approvals</span></h3><p>Building plan applications since 2014, newest submission first.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">query_layer</span></h3><p>Generic query over any layer by service and layer ID — where / fields / order / bbox / offset / count-only.</p></div>
           <div class="gl-card"><h3><span class="tool-name">field_values</span></h3><p>List a field's distinct values to discover valid filter values.</p></div>
-          <div class="gl-card"><h3><span class="tool-name">service_info</span></h3><p>List the service's layers and tables with IDs; <code>name_contains</code> filters the listing.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">service_info</span></h3><p>List every layer and table across all services, each tagged with its service; <code>name_contains</code> filters the listing.</p></div>
           <div class="gl-card"><h3><span class="tool-name">layer_info</span></h3><p>Describe a layer's fields, geometry type, and page size.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">summarize_layer</span></h3><p>Server-side counts, sums and averages over any layer, grouped by any field.</p></div>
         </div>
-        <p class="gl-hint" style="margin-top:18px">Every feature-returning tool shares a filter set: <code>limit</code> (default 200, max 2000), <code>offset</code>, <code>where</code>, <code>bbox</code>, <code>polygon</code>, <code>include_geometry</code>, <code>omit_nulls</code>, and <code>use_aliases</code>. Layer IDs occasionally drift — use <code>service_info</code> / <code>layer_info</code> to find current IDs.</p>
+        <p class="gl-hint" style="margin-top:18px">Every spatial feature-returning tool shares a filter set: <code>limit</code> (default 200, max 2000), <code>offset</code>, <code>where</code>, <code>bbox</code>, <code>polygon</code>, <code>include_geometry</code>, <code>omit_nulls</code>, and <code>use_aliases</code>. Layer IDs occasionally drift — use <code>service_info</code> / <code>layer_info</code> to find current IDs; daily live checks catch drift upstream.</p>
       </div>
     </section>
 

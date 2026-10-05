@@ -271,3 +271,65 @@ func TestTokenBlankTreatedAsAbsent(t *testing.T) {
 		})
 	}
 }
+
+func TestServiceInfoAllLabelsHubTables(t *testing.T) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"layers":[],"tables":[{"id":0,"name":"Service_Requests_2023_until_20_May_2026"}]}`)
+	})
+	c := newTestClient(t, h, 0)
+
+	got := map[string]string{}
+	for _, l := range c.ServiceInfoAll(context.Background()).Layers {
+		got[l.Service] = l.Name
+	}
+	if got["SERVICE_REQUESTS"] != "Service Requests (2023 onwards)" {
+		t.Errorf("SERVICE_REQUESTS label = %q", got["SERVICE_REQUESTS"])
+	}
+	if got["BUILDING_PLANS"] != "Building Plan Approvals (2014 onwards)" {
+		t.Errorf("BUILDING_PLANS label = %q", got["BUILDING_PLANS"])
+	}
+	if got["ODP_SPLIT_1"] != "Service_Requests_2023_until_20_May_2026" {
+		t.Errorf("ODP_SPLIT_1 should keep the upstream name, got %q", got["ODP_SPLIT_1"])
+	}
+}
+
+func TestHubServiceResolvesItemURL(t *testing.T) {
+	var queried atomic.Value
+	data := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queried.Store(r.URL.Path)
+		fmt.Fprint(w, `{"count": 7}`)
+	}))
+	t.Cleanup(data.Close)
+	portal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/sharing/rest/content/items/") {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprintf(w, `{"url": %q}`, data.URL+"/SR/FeatureServer")
+	}))
+	t.Cleanup(portal.Close)
+
+	c := New(Options{PortalURL: portal.URL, HTTPClient: http.DefaultClient})
+	t.Cleanup(c.Close)
+	n, err := c.Count(context.Background(), "SERVICE_REQUESTS", arcgis.QueryParams{LayerID: 0})
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 7 || queried.Load() != "/SR/FeatureServer/0/query" {
+		t.Errorf("count = %d via %v, want 7 via the resolved URL", n, queried.Load())
+	}
+}
+
+func TestHubServiceFallsBackWhenPortalFails(t *testing.T) {
+	portal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "down", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(portal.Close)
+	resolve := hubResolver(Options{PortalURL: portal.URL, HTTPClient: http.DefaultClient})
+	if _, ok := resolve("SERVICE_REQUESTS"); ok {
+		t.Error("want no resolution when the portal fails, so baseFor falls back")
+	}
+	if _, ok := resolve("ODP_SPLIT_5"); ok {
+		t.Error("ODP services must not be resolved through the portal")
+	}
+}

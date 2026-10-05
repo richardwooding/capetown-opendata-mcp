@@ -22,12 +22,15 @@ and attribute filtering, and in-memory response caching.
 | `water_quality` | Inland water quality sampling results (a non-spatial table), newest first. |
 | `public_lighting` | Public street lighting assets. |
 | `heritage_inventory` | Heritage inventory sites and features. |
+| `service_requests` | Citizen service requests since 2023 (about 5 million rows, a non-spatial table on ArcGIS Online), most recently loaded first. |
+| `building_plan_approvals` | Building plan applications since 2014 (a non-spatial table on ArcGIS Online), newest submission first. |
 | `query_layer` | Generic query over any layer by `service` + `layer_id` (where/fields/order/bbox/offset/count-only). |
 | `field_values` | List the distinct values of a field on a layer (`service` + `layer_id`); discover valid filter values. |
 | `service_info` | List every layer/table across all split services, each tagged with its host service; `name_contains` filters the listing. |
 | `layer_info` | Describe a layer's fields, geometry type, and page size (`service` + `layer_id`). |
+| `summarize_layer` | Server-side counts, sums, averages, minimums and maximums over any layer, optionally grouped (`service` + `layer_id`, `group_by`, `statistics`, `where`). |
 
-Every feature-returning tool accepts a shared set of filters: `limit` (default 200, max 2000),
+Every feature-returning tool except the two non-spatial tables accepts a shared set of filters: `limit` (default 200, max 2000),
 `offset` (skip N features; pair with the `next_offset` in the response to page through a layer),
 `where` (extra SQL filter, AND-combined), `bbox` (`[minLon, minLat, maxLon, maxLat]` in WGS84),
 `polygon` (rings `[[[lon,lat],…],…]` in WGS84, for irregular areas like a ward boundary),
@@ -41,6 +44,15 @@ sent as WGS84 (`inSR=4326`), so they work against layers stored in any projectio
 > service), and reports any split that is temporarily unavailable. Use it to discover the
 > `service` + `layer_id` to pass to `layer_info`, `field_values`, and `query_layer`. Published IDs
 > occasionally drift as the portal is republished, so prefer discovery over hard-coded IDs.
+>
+> Two further datasets live on ArcGIS Online rather than the split services, addressed as the
+> services `SERVICE_REQUESTS` and `BUILDING_PLANS` (layer `0`). The City republishes them under
+> date-stamped service names, so the server resolves each from its stable hub item ID at startup
+> and falls back to the last known URL. Both are tables, so they take `where`, `limit`, `offset`,
+> `omit_nulls` and `use_aliases` but no spatial filters. Use `summarize_layer` for counts and
+> rankings rather than paging through millions of rows. In `service_requests`, `Ward` is a
+> zero-padded string (`Ward = '062'`) and about a third of rows carry a placeholder ward; dates
+> filter as `DATE 'YYYY-MM-DD'`.
 
 ## Install
 

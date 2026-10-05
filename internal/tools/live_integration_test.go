@@ -73,7 +73,10 @@ func TestLiveDatasetTools(t *testing.T) {
 		run      func() (FeatureResult, error)
 		wantSome bool
 	}{
-		{"wards", func() (FeatureResult, error) { _, r, e := tl.wards(ctx, nil, WardsInput{CommonQuery: small}); return r, e }, true},
+		{"wards", func() (FeatureResult, error) {
+			_, r, e := tl.wards(ctx, nil, WardsInput{CommonQuery: small})
+			return r, e
+		}, true},
 		{"land_parcels_by_suburb", func() (FeatureResult, error) {
 			_, r, e := tl.landParcels(ctx, nil, LandParcelsInput{Suburb: "Newlands", CommonQuery: small})
 			return r, e
@@ -192,4 +195,82 @@ func TestLiveErrorPaths(t *testing.T) {
 			t.Errorf("expected a hint pointing at layer_info, got %v", err)
 		}
 	})
+}
+
+// TestLiveHubTables fetches a few rows from each ArcGIS Online table, proving
+// the item IDs resolve and the default ordering is accepted.
+func TestLiveHubTables(t *testing.T) {
+	tl := liveTools(t)
+	ctx := context.Background()
+
+	_, sr, err := tl.serviceRequests(ctx, nil, ServiceRequestsInput{TableQuery{Limit: 3, Where: "Ward = '062'"}})
+	if err != nil {
+		t.Fatalf("service_requests: %v", err)
+	}
+	if sr.Count == 0 || sr.Features[0].Attributes["Ward"] != "062" {
+		t.Fatalf("expected ward 062 service requests, got %+v", sr.Features)
+	}
+
+	_, bp, err := tl.buildingPlans(ctx, nil, BuildingPlansInput{TableQuery{Limit: 3, Where: "Ward_No = 62"}})
+	if err != nil {
+		t.Fatalf("building_plan_approvals: %v", err)
+	}
+	if bp.Count == 0 {
+		t.Fatal("expected building plan rows for ward 62")
+	}
+}
+
+// TestLiveServiceInfoListsHubTables checks the hub tables join the catalogue
+// under their friendly labels.
+func TestLiveServiceInfoListsHubTables(t *testing.T) {
+	tl := liveTools(t)
+	_, res, err := tl.serviceInfo(context.Background(), nil, ServiceInfoInput{NameContains: "onwards"})
+	if err != nil {
+		t.Fatalf("service_info: %v", err)
+	}
+	got := map[string]bool{}
+	for _, l := range res.Layers {
+		got[l.Service] = l.IsTable
+	}
+	if !got["SERVICE_REQUESTS"] || !got["BUILDING_PLANS"] {
+		t.Fatalf("expected both hub tables listed as tables, got %+v", res.Layers)
+	}
+}
+
+// TestLiveSummarize groups service requests by complaint type and land parcels
+// by zoning, covering an ArcGIS Online table and an ODP_SPLIT layer.
+func TestLiveSummarize(t *testing.T) {
+	tl := liveTools(t)
+	ctx := context.Background()
+
+	_, sr, err := tl.summarizeLayer(ctx, nil, SummarizeLayerInput{
+		Service: "SERVICE_REQUESTS", LayerID: 0,
+		GroupBy: []string{"C3_Complaint_Type"},
+		Where:   "Ward = '062' AND Created_On_Date >= DATE '2026-01-01'",
+		Limit:   5,
+	})
+	if err != nil {
+		t.Fatalf("summarize service requests: %v", err)
+	}
+	if sr.Count == 0 {
+		t.Fatal("expected complaint-type groups for ward 062")
+	}
+	if _, ok := sr.Groups[0]["count"]; !ok {
+		t.Fatalf("expected a count column, got %v", sr.Groups[0])
+	}
+	t.Logf("ward 062 top complaint: %v", sr.Groups[0])
+
+	_, lp, err := tl.summarizeLayer(ctx, nil, SummarizeLayerInput{
+		Service: "ODP_SPLIT_4", LayerID: 0,
+		GroupBy: []string{"ZONING"},
+		Where:   "OFC_SBRB_NAME = 'NEWLANDS'",
+		Limit:   5,
+	})
+	if err != nil {
+		t.Fatalf("summarize land parcels: %v", err)
+	}
+	if lp.Count == 0 {
+		t.Fatal("expected zoning groups for Newlands")
+	}
+	t.Logf("Newlands top zoning: %v", lp.Groups[0])
 }

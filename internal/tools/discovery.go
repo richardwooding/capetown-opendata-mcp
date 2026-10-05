@@ -16,7 +16,7 @@ type ServiceInfoInput struct {
 
 // ServiceInfoResult is the merged layer catalogue across every split service.
 type ServiceInfoResult struct {
-	Layers      []cct.ServiceLayer       `json:"layers" jsonschema:"all layers and tables across the ODP_SPLIT_* services, each tagged with the service that hosts it (feed service + id to layer_info and query_layer)"`
+	Layers      []cct.ServiceLayer       `json:"layers" jsonschema:"all layers and tables across every service, each tagged with the service that hosts it (feed service + id to layer_info and query_layer)"`
 	Unavailable []cct.UnavailableService `json:"unavailable,omitempty" jsonschema:"split services that could not be listed right now (e.g. stopped or mid-restructure upstream)"`
 }
 
@@ -44,7 +44,7 @@ type FieldInfo struct {
 
 // LayerInfoInput is the input for the layer_info tool.
 type LayerInfoInput struct {
-	Service string `json:"service" jsonschema:"the ODP_SPLIT_* feature service that hosts the layer (e.g. \"ODP_SPLIT_5\"); use service_info to discover it"`
+	Service string `json:"service" jsonschema:"the service that hosts the layer: an ODP_SPLIT_* service (e.g. \"ODP_SPLIT_5\"), SERVICE_REQUESTS or BUILDING_PLANS; use service_info to discover it"`
 	LayerID int    `json:"layer_id" jsonschema:"the layer ID within its service to describe"`
 }
 
@@ -87,7 +87,7 @@ func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerI
 func (t *Tools) registerDiscovery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "service_info",
-		Description: "List every layer and table across the Cape Town Open Data portal, each tagged with the ODP_SPLIT_* service that hosts it. The portal is split across a dozen services; this aggregates them into one catalogue. Use it to discover the service + layer_id to pass to layer_info and query_layer. The portal publishes 150+ layers; pass name_contains to filter by name (e.g. \"water\").",
+		Description: "List every layer and table across the Cape Town Open Data portal, each tagged with the service that hosts it. The portal is split across a dozen ODP_SPLIT_* services, plus the SERVICE_REQUESTS and BUILDING_PLANS tables on ArcGIS Online; this aggregates them into one catalogue. Use it to discover the service + layer_id to pass to layer_info, query_layer and summarize_layer. The portal publishes more than 130 layers; pass name_contains to filter by name (e.g. \"water\").",
 	}, t.serviceInfo)
 
 	mcp.AddTool(s, &mcp.Tool{

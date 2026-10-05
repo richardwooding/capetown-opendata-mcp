@@ -12,10 +12,10 @@ github.com/modelcontextprotocol/go-sdk v1.8.0 h1:KIvahhYqwtbeniWVPs3TcXEA7b8jEtw
 github.com/modelcontextprotocol/go-sdk v1.8.0/go.mod h1:dL7u98E/zjJTGzEq+j30jQ8K2k1mb6LeAH4inEcSGts=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/richardwooding/capetown-opendata v0.2.1 h1:y6J4/0sqk3QNQ+DOUrejmy7V/LG6L8i2c/JC/HYhuiE=
-github.com/richardwooding/capetown-opendata v0.2.1/go.mod h1:vq/TdDnSPq/8XZ3X97485EeSXfbEPmrzV8frYiwhU+8=
-github.com/richardwooding/go-arcgis v0.3.0 h1:ZEhQApicPqrnNGhTH0/G9NaB97vAkKZjJWkaxFFuT+M=
-github.com/richardwooding/go-arcgis v0.3.0/go.mod h1:uZfcoLVdTOLobzFJAzxnrXlFsnuK4zyz59ofbRRgam4=
+github.com/richardwooding/capetown-opendata v0.3.1 h1:7AnLj6j+x+pA7KUt8EB8I7oQLSApb1QZEKkqAXwEbjw=
+github.com/richardwooding/capetown-opendata v0.3.1/go.mod h1:Rk4oZwitqQL0tWbBNdK1jPgc0i0AdX8YTc29KLJCMlM=
+github.com/richardwooding/go-arcgis v0.4.0 h1:AVfN4WvjXzkqiv71hd93cueSxD6Ova3HrmI72pHliyo=
+github.com/richardwooding/go-arcgis v0.4.0/go.mod h1:uZfcoLVdTOLobzFJAzxnrXlFsnuK4zyz59ofbRRgam4=
 github.com/segmentio/asm v1.1.3 h1:WM03sfUOENvvKexOLp+pCqgb/WDjsi7EK8gIsICtzhc=
 github.com/segmentio/asm v1.1.3/go.mod h1:Ld3L4ZXGNcSLRg4JBsZ3//1+f/TjYl0Mzen/DQy1EJg=
 github.com/segmentio/encoding v0.5.4 h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=
