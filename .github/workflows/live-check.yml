@@ -1,0 +1,28 @@
+name: Live drift check
+
+# Runs the MCP tool handlers against the live City of Cape Town Feature Services
+# to catch upstream drift (moved layer IDs, renamed columns, dead split services).
+# Network-dependent, so it runs on a schedule and on demand rather than on every
+# push. A failure here means the live service changed, not that a PR is broken.
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: "47 4 * * *" # daily at 04:47 UTC, half an hour after the capetown-opendata lib's check
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Integration tests (live service)
+        run: go test -tags=integration -run TestLive -v ./...
