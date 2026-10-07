@@ -27,6 +27,9 @@ type Config struct {
 	// ServerFolder is the ArcGIS REST folder for the ODP_SPLIT services; empty
 	// means the library default (esapqa).
 	ServerFolder string
+	// MaxResponseTokens is the approximate size budget for one tool response;
+	// zero means the default.
+	MaxResponseTokens int
 }
 
 // Server is a configured Cape Town Open Data MCP server.
@@ -49,7 +52,7 @@ func New(cfg Config) *Server {
 		Version:    cfg.Version,
 		WebsiteURL: "https://github.com/richardwooding/capetown-opendata-mcp",
 	}, nil)
-	tools.New(client).Register(m)
+	tools.New(client).WithResponseTokens(cfg.MaxResponseTokens).Register(m)
 	return &Server{cfg: cfg, client: client, mcp: m}
 }
 

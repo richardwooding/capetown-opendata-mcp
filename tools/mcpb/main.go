@@ -117,6 +117,7 @@ func buildManifest(goos, version string) Manifest {
 					"--timeout", "${user_config.timeout}",
 					"--cache-ttl", "${user_config.cache_ttl}",
 					"--server", "${user_config.server}",
+					"--max-response-tokens", "${user_config.max_response_tokens}",
 				},
 				Env: map[string]string{
 					"CAPETOWN_MCP_ARCGIS_TOKEN": "${user_config.arcgis_token}",
@@ -142,6 +143,12 @@ func buildManifest(goos, version string) Manifest {
 				Title:       "Cache TTL",
 				Description: "Response cache TTL (Go duration; 0 disables caching)",
 				Default:     "5m",
+			},
+			"max_response_tokens": {
+				Type:        "string",
+				Title:       "Max response tokens",
+				Description: "Approximate size budget for one tool response. Raise it (e.g. 20000) to get more map features per call if your client allows larger tool results",
+				Default:     "8000",
 			},
 			"server": {
 				Type:        "string",

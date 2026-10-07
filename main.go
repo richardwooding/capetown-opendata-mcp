@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/richardwooding/capetown-opendata-mcp/internal/cct"
 	"github.com/richardwooding/capetown-opendata-mcp/internal/server"
+	"github.com/richardwooding/capetown-opendata-mcp/internal/tools"
 )
 
 // Build information, injected via -ldflags at release time.
@@ -37,6 +39,7 @@ func run() error {
 		timeout     = fs.Duration("timeout", envDuration("CAPETOWN_MCP_TIMEOUT", 30*time.Second), "per-request upstream timeout")
 		cacheTTL    = fs.Duration("cache-ttl", envDuration("CAPETOWN_MCP_CACHE_TTL", 5*time.Minute), "response cache TTL (0 disables caching)")
 		token       = fs.String("arcgis-token", os.Getenv("CAPETOWN_MCP_ARCGIS_TOKEN"), "optional ArcGIS token for authenticated services")
+		maxTokens   = fs.Int("max-response-tokens", envInt("CAPETOWN_MCP_MAX_RESPONSE_TOKENS", tools.DefaultResponseTokens), "approximate token budget for one tool response; raise it for clients with larger limits")
 		serverName  = fs.String("server", env("CAPETOWN_MCP_SERVER", cct.DefaultServer), "City server for the ODP_SPLIT services: esapqa, citymaps, or an https ArcGIS REST services folder URL")
 		showVersion = fs.Bool("version", false, "print version and exit")
 	)
@@ -57,14 +60,15 @@ func run() error {
 	defer stop()
 
 	srv := server.New(server.Config{
-		Name:         "capetown-opendata",
-		Version:      version,
-		Transport:    *transport,
-		HTTPAddr:     *httpAddr,
-		Timeout:      *timeout,
-		CacheTTL:     *cacheTTL,
-		Token:        *token,
-		ServerFolder: folder,
+		Name:              "capetown-opendata",
+		Version:           version,
+		Transport:         *transport,
+		HTTPAddr:          *httpAddr,
+		Timeout:           *timeout,
+		CacheTTL:          *cacheTTL,
+		Token:             *token,
+		ServerFolder:      folder,
+		MaxResponseTokens: *maxTokens,
 	})
 	return srv.Run(ctx)
 }
@@ -80,6 +84,15 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 	if v := os.Getenv(key); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			return d
+		}
+	}
+	return fallback
+}
+
+func envInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
 		}
 	}
 	return fallback

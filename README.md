@@ -35,14 +35,20 @@ Every feature-returning tool accepts a shared set of filters: `limit` (default 2
 filter, AND-combined), `fields` (only these columns), `omit_nulls` (default `true`: drop null and
 empty values), and `use_aliases` (rename raw column names to their human-readable aliases). The
 spatial tools also take `bbox` (`[minLon, minLat, maxLon, maxLat]` in WGS84), `polygon` (rings
-`[[[lon,lat],…],…]` in WGS84) and `include_geometry` (default `false`). Spatial filters are sent as
+`[[[lon,lat],…],…]` in WGS84), `include_geometry` (default `false`) and `geometry_detail`:
+`simplified` (default; generalised server-side to about 5 m), `full`, or `centroid` (one point per
+feature, the smallest option for plotting many features on a map). Spatial filters are sent as
 WGS84 (`inSR=4326`), so they work against layers stored in any projection.
 
 **Response size.** Results are kept small enough for MCP clients' tool-output limits. Rows drop
-null values and the geometry-derived `Shape__*` columns by default, geometry coordinates are rounded
-to 6 decimal places (about 10 cm), and every response is capped at roughly 8,000 tokens. A page cut
-short by that cap still sets `exceeded_limit` and `next_offset`, plus a `note` saying so; select
-fewer `fields` or use `summarize_layer` when you only need counts.
+null values and the geometry-derived `Shape__*` columns by default, and geometry coordinates are
+rounded to 6 decimal places (about 10 cm). Each response is capped by a token budget, 8,000 by
+default. A page cut short by the budget sets `exceeded_limit` and `next_offset`, and its `note`
+says how many rows came back and how to get more per call: select fewer `fields`, use
+`geometry_detail: "centroid"`, or raise the budget with `--max-response-tokens`
+(`CAPETOWN_MCP_MAX_RESPONSE_TOKENS`, or "Max response tokens" in Claude Desktop's settings) if your
+client accepts larger tool results. For example, mapping 594 heritage sites takes four calls as
+centroids at the default budget, or two at 20,000 tokens.
 
 > **Note:** The City of Cape Town publishes its Open Data across thirteen split feature services
 > (`ODP_SPLIT_1` … `ODP_SPLIT_13`); a layer is addressed by both a `service` and a `layer_id`.
@@ -130,6 +136,7 @@ All flags can also be set via environment variables (prefix `CAPETOWN_MCP_`):
 | `--timeout` | `CAPETOWN_MCP_TIMEOUT` | `30s` | Per-request upstream timeout. |
 | `--cache-ttl` | `CAPETOWN_MCP_CACHE_TTL` | `5m` | Response cache TTL (`0` disables caching). |
 | `--arcgis-token` | `CAPETOWN_MCP_ARCGIS_TOKEN` | _(none)_ | Optional ArcGIS token for authenticated services. |
+| `--max-response-tokens` | `CAPETOWN_MCP_MAX_RESPONSE_TOKENS` | `8000` | Approximate token budget for one tool response. Raise it for clients that accept larger tool results. |
 | `--server` | `CAPETOWN_MCP_SERVER` | `esapqa` | City server for the `ODP_SPLIT_*` services: `esapqa`, `citymaps`, or an `https://…/rest/services/<folder>` URL. |
 
 ## Development

@@ -33,7 +33,7 @@ func (t *Tools) serviceInfo(ctx context.Context, _ *mcp.CallToolRequest, in Serv
 			out.Layers = append(out.Layers, l)
 		}
 	}
-	if n := fitCount(out.Layers); n < len(out.Layers) {
+	if n := fitCount(out.Layers, t.budgetChars()); n < len(out.Layers) {
 		out.Layers, out.Note = out.Layers[:n], "Trimmed to fit the response size budget; narrow the listing with name_contains."
 	}
 	return nil, out, nil

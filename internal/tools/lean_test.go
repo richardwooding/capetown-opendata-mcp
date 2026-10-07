@@ -89,7 +89,7 @@ func TestResponseBudgetTrimsAndPages(t *testing.T) {
 
 func TestResponseBudgetKeepsOneHugeRow(t *testing.T) {
 	var query string
-	body := fmt.Sprintf(`{"features":[{"properties":{"TEXT":%q}},{"properties":{"TEXT":"b"}}]}`, strings.Repeat("x", maxResponseChars*2))
+	body := fmt.Sprintf(`{"features":[{"properties":{"TEXT":%q}},{"properties":{"TEXT":"b"}}]}`, strings.Repeat("x", DefaultResponseTokens*charsPerToken*2))
 	tools := New(capturingServerBody(t, &query, body))
 
 	_, res, err := tools.heritageInventory(context.Background(), nil, HeritageInventoryInput{})

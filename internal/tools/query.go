@@ -22,7 +22,7 @@ type QueryLayerResult struct {
 	Features      []Feature `json:"features" jsonschema:"the features (empty for count_only)"`
 	ExceededLimit bool      `json:"exceeded_limit" jsonschema:"true if more features are available"`
 	NextOffset    *int      `json:"next_offset,omitempty" jsonschema:"offset for the next page"`
-	Note          string    `json:"note,omitempty" jsonschema:"set when the page was trimmed to fit the size budget"`
+	Note          string    `json:"note,omitempty" jsonschema:"why a page stopped early and how to get more per call"`
 	CountOnly     bool      `json:"count_only" jsonschema:"echoes count_only"`
 }
 
@@ -70,7 +70,7 @@ type FieldValuesResult struct {
 	Count         int    `json:"count" jsonschema:"values returned"`
 	Values        []any  `json:"values" jsonschema:"distinct non-null values, ascending"`
 	ExceededLimit bool   `json:"exceeded_limit" jsonschema:"true if more values are available"`
-	Note          string `json:"note,omitempty" jsonschema:"set when trimmed to fit the size budget"`
+	Note          string `json:"note,omitempty" jsonschema:"why the list stopped early and how to get more"`
 }
 
 func (t *Tools) fieldValues(ctx context.Context, _ *mcp.CallToolRequest, in FieldValuesInput) (*mcp.CallToolResult, FieldValuesResult, error) {
@@ -99,8 +99,8 @@ func (t *Tools) fieldValues(ctx context.Context, _ *mcp.CallToolRequest, in Fiel
 		}
 	}
 	res := FieldValuesResult{Field: in.Field, Values: values, ExceededLimit: more}
-	if n := fitCount(values); n < len(values) {
-		res.Values, res.ExceededLimit, res.Note = values[:n], true, trimmedNote
+	if n := fitCount(values, t.budgetChars()); n < len(values) {
+		res.Values, res.ExceededLimit, res.Note = values[:n], true, t.trimNote(n, limit, " (or narrow with where)")
 	}
 	res.Count = len(res.Values)
 	return nil, res, nil

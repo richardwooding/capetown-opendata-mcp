@@ -31,7 +31,7 @@ type SummarizeLayerResult struct {
 	Count         int              `json:"count" jsonschema:"groups returned"`
 	Groups        []map[string]any `json:"groups" jsonschema:"group_by values plus each statistic"`
 	ExceededLimit bool             `json:"exceeded_limit" jsonschema:"true if more groups are available"`
-	Note          string           `json:"note,omitempty" jsonschema:"set when trimmed to fit the size budget"`
+	Note          string           `json:"note,omitempty" jsonschema:"why the list stopped early and how to get more"`
 }
 
 // esapqa rejects "count" as an output field name, treating it as reserved.
@@ -82,8 +82,8 @@ func (t *Tools) summarizeLayer(ctx context.Context, _ *mcp.CallToolRequest, in S
 	if len(res.Groups) > limit {
 		res.Groups, res.ExceededLimit = res.Groups[:limit], true
 	}
-	if n := fitCount(res.Groups); n < len(res.Groups) {
-		res.Groups, res.ExceededLimit, res.Note = res.Groups[:n], true, trimmedNote
+	if n := fitCount(res.Groups, t.budgetChars()); n < len(res.Groups) {
+		res.Groups, res.ExceededLimit, res.Note = res.Groups[:n], true, t.trimNote(n, limit, " (or group by fewer fields)")
 	}
 	res.Count = len(res.Groups)
 	return nil, res, nil
