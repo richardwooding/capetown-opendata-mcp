@@ -74,7 +74,7 @@ func TestResponseBudgetTrimsAndPages(t *testing.T) {
 	tools := New(capturingServerBody(t, &query, body))
 
 	_, res, err := tools.queryLayer(context.Background(), nil, QueryLayerInput{
-		Service: "ODP_SPLIT_3", LayerID: 2, Limit: 100, Offset: 10,
+		Service: "ODP_SPLIT_3", LayerID: 2, Limit: 100,
 	})
 	if err != nil {
 		t.Fatalf("queryLayer: %v", err)
@@ -82,8 +82,8 @@ func TestResponseBudgetTrimsAndPages(t *testing.T) {
 	if res.Count == 0 || res.Count >= 100 {
 		t.Fatalf("count = %d, want a trimmed page", res.Count)
 	}
-	if !res.ExceededLimit || res.Note == "" || res.NextOffset == nil || *res.NextOffset != 10+res.Count {
-		t.Errorf("trimmed page should set exceeded_limit, note and next_offset=%d: %+v", 10+res.Count, res)
+	if !res.ExceededLimit || res.Note == "" || res.NextCursor == "" {
+		t.Errorf("trimmed page should set exceeded_limit, note and next_cursor: %+v", res)
 	}
 }
 

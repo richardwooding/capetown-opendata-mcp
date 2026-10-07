@@ -63,14 +63,14 @@ func (t *Tools) budgetChars() int { return t.responseTokens * charsPerToken }
 func (t *Tools) trimNote(returned, limit int, extra string) string {
 	return fmt.Sprintf("Returned %d of up to %d: this page hit the server's response budget of about %d tokens. "+
 		"To get more per call, request only the columns you need with fields%s, or raise the budget with the server's "+
-		"max_response_tokens setting (env CAPETOWN_MCP_MAX_RESPONSE_TOKENS). Continue with next_offset.",
+		"max_response_tokens setting (env CAPETOWN_MCP_MAX_RESPONSE_TOKENS). Continue by passing next_cursor back unchanged with the same filters.",
 		returned, limit, t.responseTokens, extra)
 }
 
 // CommonQuery holds filters shared by every feature-returning tool.
 type CommonQuery struct {
 	Limit           int           `json:"limit,omitempty" jsonschema:"max features (default 25, max 2000); a page can stop early at the response budget, see note"`
-	Offset          int           `json:"offset,omitempty" jsonschema:"features to skip; pass next_offset to page"`
+	Cursor          string        `json:"cursor,omitempty" jsonschema:"next_cursor from the previous page, unchanged, with the same filters; never add your own OBJECTID or offset filters to page"`
 	Where           string        `json:"where,omitempty" jsonschema:"extra SQL filter; field names via layer_info"`
 	Fields          []string      `json:"fields,omitempty" jsonschema:"columns to return; omit for all"`
 	BBox            []float64     `json:"bbox,omitempty" jsonschema:"[minLon, minLat, maxLon, maxLat] in WGS84"`
@@ -115,7 +115,7 @@ type FeatureResult struct {
 	Count         int       `json:"count" jsonschema:"number of features returned"`
 	Features      []Feature `json:"features" jsonschema:"the returned features"`
 	ExceededLimit bool      `json:"exceeded_limit" jsonschema:"true if more features are available"`
-	NextOffset    *int      `json:"next_offset,omitempty" jsonschema:"offset for the next page"`
+	NextCursor    string    `json:"next_cursor,omitempty" jsonschema:"pass back unchanged as cursor to get the next page"`
 	Note          string    `json:"note,omitempty" jsonschema:"why a page stopped early and how to get more per call"`
 }
 
@@ -128,6 +128,10 @@ func (t *Tools) run(ctx context.Context, service string, base arcgis.QueryParams
 		return nil, FeatureResult{}, fmt.Errorf("unknown geometry_detail %q; use simplified, full or centroid", c.GeometryDetail)
 	}
 	p := applyCommon(base, c)
+	pg, err := t.preparePaging(ctx, service, &p, c)
+	if err != nil {
+		return nil, FeatureResult{}, err
+	}
 	limit := effectiveLimit(c.Limit)
 	feats, more, err := t.client.QueryLimit(ctx, service, p, limit)
 	if err != nil {
@@ -144,11 +148,62 @@ func (t *Tools) run(ctx context.Context, service string, base arcgis.QueryParams
 		}
 		res.Features, res.Count, res.ExceededLimit, res.Note = res.Features[:n], n, true, t.trimNote(n, limit, extra)
 	}
-	if res.ExceededLimit {
-		next := c.Offset + res.Count
-		res.NextOffset = &next
+	if res.ExceededLimit && res.Count > 0 {
+		res.NextCursor = pg.next(feats[res.Count-1], res.Count)
 	}
 	return nil, res, nil
+}
+
+type paging struct {
+	mode  string
+	oid   string
+	hash  string
+	start int64
+}
+
+// preparePaging applies an incoming cursor to p and records what is needed to
+// mint the next one. It must run after applyCommon so the hash covers the
+// final filters.
+func (t *Tools) preparePaging(ctx context.Context, service string, p *arcgis.QueryParams, c CommonQuery) (*paging, error) {
+	oid := t.client.OIDField(ctx, service, p.LayerID)
+	mode, desc := pagingMode(p.OrderByFields, oid)
+	pg := &paging{mode: mode, oid: oid, hash: queryHash(service, *p, c.BBox, c.Polygon)}
+	if mode == pageByID && len(p.OrderByFields) == 0 {
+		p.OrderByFields = []string{oid}
+	}
+	if oid != "" && len(p.Fields) > 0 && !containsFold(p.Fields, oid) {
+		p.Fields = append(slices.Clone(p.Fields), oid)
+	}
+	if c.Cursor == "" {
+		return pg, nil
+	}
+	cur, err := decodeCursor(c.Cursor, pg.hash)
+	if err != nil {
+		return nil, err
+	}
+	switch cur.Mode {
+	case pageByID:
+		p.Where = andWhere(p.Where, idCondition(oid, desc, cur.Key))
+	default:
+		p.ResultOffset = int(cur.Key)
+		pg.start = cur.Key
+	}
+	return pg, nil
+}
+
+// next mints the cursor that resumes after last, the final of returned rows.
+// If the ID is missing from the row, it falls back to an offset cursor.
+func (pg *paging) next(last arcgis.Feature, returned int) string {
+	if pg.mode == pageByID {
+		if id, ok := asInt64(last.Attrs()[pg.oid]); ok {
+			return encodeCursor(cursor{Mode: pageByID, Key: id, Hash: pg.hash})
+		}
+	}
+	return encodeCursor(cursor{Mode: pageByOffset, Key: pg.start + int64(returned), Hash: pg.hash})
+}
+
+func containsFold(list []string, s string) bool {
+	return slices.ContainsFunc(list, func(x string) bool { return strings.EqualFold(x, s) })
 }
 
 // fitCount returns how many leading items fit in budget characters of JSON,
@@ -214,9 +269,6 @@ func applyCommon(p arcgis.QueryParams, c CommonQuery) arcgis.QueryParams {
 	}
 	if len(c.Fields) > 0 {
 		p.Fields = c.Fields
-	}
-	if c.Offset > 0 {
-		p.ResultOffset = c.Offset
 	}
 	limit := effectiveLimit(c.Limit)
 	p.PageSize = limit

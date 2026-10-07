@@ -130,28 +130,6 @@ func TestLimitClamped(t *testing.T) {
 	}
 }
 
-func TestOffsetAndNextOffset(t *testing.T) {
-	var query string
-	// One feature plus exceededTransferLimit -> more results available.
-	body := `{"features":[{"properties":{"BlockID":1}}],"exceededTransferLimit":true}`
-	tools := New(capturingServerBody(t, &query, body))
-
-	_, res, err := tools.queryLayer(context.Background(), nil, QueryLayerInput{
-		Service: "ODP_SPLIT_7",
-		LayerID: 13,
-		Limit:   1, Offset: 5,
-	})
-	if err != nil {
-		t.Fatalf("queryLayer: %v", err)
-	}
-	if !strings.Contains(query, "resultOffset=5") {
-		t.Fatalf("expected resultOffset=5 in query, got %q", query)
-	}
-	if res.NextOffset == nil || *res.NextOffset != 6 {
-		t.Fatalf("expected next_offset 6, got %v", res.NextOffset)
-	}
-}
-
 func TestAnnotateErr(t *testing.T) {
 	cases := []struct {
 		name string

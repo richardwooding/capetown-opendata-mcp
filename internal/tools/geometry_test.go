@@ -73,7 +73,7 @@ func TestTrimNoteExplainsBudgetAndSetting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("heritageInventory: %v", err)
 	}
-	for _, want := range []string{fmt.Sprintf("Returned %d of up to 200", res.Count), "8000 tokens", "fields", "centroid", "max_response_tokens", "CAPETOWN_MCP_MAX_RESPONSE_TOKENS", "next_offset"} {
+	for _, want := range []string{fmt.Sprintf("Returned %d of up to 200", res.Count), "8000 tokens", "fields", "centroid", "max_response_tokens", "CAPETOWN_MCP_MAX_RESPONSE_TOKENS", "next_cursor"} {
 		if !strings.Contains(res.Note, want) {
 			t.Errorf("note missing %q: %s", want, res.Note)
 		}

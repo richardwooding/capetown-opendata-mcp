@@ -24,14 +24,14 @@ and attribute filtering, and in-memory response caching.
 | `heritage_inventory` | Heritage inventory sites and features. |
 | `service_requests` | Citizen service requests since 2023 (about 5 million rows, a non-spatial table on ArcGIS Online), most recently loaded first. |
 | `building_plan_approvals` | Building plan applications since 2014 (a non-spatial table on ArcGIS Online), newest submission first. |
-| `query_layer` | Generic query over any layer by `service` + `layer_id` (where/fields/order/bbox/offset/count-only). |
+| `query_layer` | Generic query over any layer by `service` + `layer_id` (where/fields/order/bbox/count-only). |
 | `field_values` | List the distinct values of a field on a layer (`service` + `layer_id`); discover valid filter values. |
 | `service_info` | List every layer/table across all split services, each tagged with its host service; `name_contains` filters the listing. |
 | `layer_info` | Describe a layer's fields, geometry type, and page size (`service` + `layer_id`). |
 | `summarize_layer` | Server-side counts, sums, averages, minimums and maximums over any layer, optionally grouped (`service` + `layer_id`, `group_by`, `statistics`, `where`). |
 
 Every feature-returning tool accepts a shared set of filters: `limit` (default 25, max 2000),
-`offset` (pair with the `next_offset` in the response to page through a layer), `where` (extra SQL
+`cursor` (see **Paging** below), `where` (extra SQL
 filter, AND-combined), `fields` (only these columns), `omit_nulls` (default `true`: drop null and
 empty values), and `use_aliases` (rename raw column names to their human-readable aliases). The
 spatial tools also take `bbox` (`[minLon, minLat, maxLon, maxLat]` in WGS84), `polygon` (rings
@@ -43,12 +43,19 @@ WGS84 (`inSR=4326`), so they work against layers stored in any projection.
 **Response size.** Results are kept small enough for MCP clients' tool-output limits. Rows drop
 null values and the geometry-derived `Shape__*` columns by default, and geometry coordinates are
 rounded to 6 decimal places (about 10 cm). Each response is capped by a token budget, 8,000 by
-default. A page cut short by the budget sets `exceeded_limit` and `next_offset`, and its `note`
+default. A page cut short by the budget sets `exceeded_limit` and `next_cursor`, and its `note`
 says how many rows came back and how to get more per call: select fewer `fields`, use
 `geometry_detail: "centroid"`, or raise the budget with `--max-response-tokens`
 (`CAPETOWN_MCP_MAX_RESPONSE_TOKENS`, or "Max response tokens" in Claude Desktop's settings) if your
 client accepts larger tool results. For example, mapping 594 heritage sites takes four calls as
 centroids at the default budget, or two at 20,000 tokens.
+
+**Paging.** When more rows exist, a response carries `next_cursor`. Pass it back unchanged as
+`cursor`, with the same filters, to get the next page; there is no offset parameter, and you should
+not add your own `OBJECTID` filters. Where the sort is by object ID (most layers, and any
+`query_layer` call without `order_by`) the cursor resumes after the last ID returned, so pages stay
+correct even if the City adds or removes rows between calls. With any other sort it falls back to
+an offset. A cursor reused with different filters is rejected rather than silently skipping rows.
 
 > **Note:** The City of Cape Town publishes its Open Data across thirteen split feature services
 > (`ODP_SPLIT_1` … `ODP_SPLIT_13`); a layer is addressed by both a `service` and a `layer_id`.
@@ -63,7 +70,7 @@ centroids at the default budget, or two at 20,000 tokens.
 > Two further datasets live on ArcGIS Online rather than the split services, addressed as the
 > services `SERVICE_REQUESTS` and `BUILDING_PLANS` (layer `0`). The City republishes them under
 > date-stamped service names, so the server resolves each from its stable hub item ID at startup
-> and falls back to the last known URL. Both are tables, so they take `where`, `limit`, `offset`,
+> and falls back to the last known URL. Both are tables, so they take `where`, `limit`, `cursor`,
 > `omit_nulls` and `use_aliases` but no spatial filters. Use `summarize_layer` for counts and
 > rankings rather than paging through millions of rows. In `service_requests`, `Ward` is a
 > zero-padded string (`Ward = '062'`) and about a third of rows carry a placeholder ward; dates

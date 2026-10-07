@@ -306,3 +306,59 @@ func TestLiveCityMapsServer(t *testing.T) {
 		t.Fatalf("wards on citymaps: count=%d err=%v", res.Count, err)
 	}
 }
+
+// TestLiveCursorPaging pages through a City layer (keyset on OBJECTID) and an
+// ArcGIS Online table (keyset on ObjectId DESC) using only next_cursor, and
+// checks no row repeats and the layer total matches summarize_layer.
+func TestLiveCursorPaging(t *testing.T) {
+	tl := liveTools(t)
+	ctx := context.Background()
+
+	_, sum, err := tl.summarizeLayer(ctx, nil, SummarizeLayerInput{Service: "ODP_SPLIT_3", LayerID: 2, Where: "CNFR_CCT_GRD = '2'"})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	want := int(sum.Groups[0]["record_count"].(float64))
+	seen := map[any]bool{}
+	in := HeritageInventoryInput{CommonQuery{Where: "CNFR_CCT_GRD = '2'", Limit: 2000, Fields: []string{"HRTG_INV_SITE_NAME"}}}
+	for range 20 {
+		_, res, err := tl.heritageInventory(ctx, nil, in)
+		if err != nil {
+			t.Fatalf("heritage page: %v", err)
+		}
+		for _, f := range res.Features {
+			id := f.Attributes["OBJECTID"]
+			if seen[id] {
+				t.Fatalf("OBJECTID %v repeated", id)
+			}
+			seen[id] = true
+		}
+		if res.NextCursor == "" {
+			break
+		}
+		in.Cursor = res.NextCursor
+	}
+	if len(seen) != want {
+		t.Errorf("paged %d heritage sites, summarize_layer counts %d", len(seen), want)
+	}
+
+	srIn := ServiceRequestsInput{TableQuery{Where: "Ward = '062'", Limit: 100, Fields: []string{"C3_Complaint_Type"}}}
+	srSeen := map[any]bool{}
+	for page := range 3 {
+		_, res, err := tl.serviceRequests(ctx, nil, srIn)
+		if err != nil {
+			t.Fatalf("service requests page %d: %v", page, err)
+		}
+		for _, f := range res.Features {
+			if id := f.Attributes["ObjectId"]; srSeen[id] {
+				t.Fatalf("ObjectId %v repeated", id)
+			} else {
+				srSeen[id] = true
+			}
+		}
+		if res.NextCursor == "" {
+			t.Fatalf("page %d: expected next_cursor on a table with thousands of rows", page)
+		}
+		srIn.Cursor = res.NextCursor
+	}
+}

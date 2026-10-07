@@ -21,7 +21,7 @@ type QueryLayerResult struct {
 	Count         int       `json:"count" jsonschema:"features returned, or total matching for count_only"`
 	Features      []Feature `json:"features" jsonschema:"the features (empty for count_only)"`
 	ExceededLimit bool      `json:"exceeded_limit" jsonschema:"true if more features are available"`
-	NextOffset    *int      `json:"next_offset,omitempty" jsonschema:"offset for the next page"`
+	NextCursor    string    `json:"next_cursor,omitempty" jsonschema:"pass back unchanged as cursor to get the next page"`
 	Note          string    `json:"note,omitempty" jsonschema:"why a page stopped early and how to get more per call"`
 	CountOnly     bool      `json:"count_only" jsonschema:"echoes count_only"`
 }
@@ -50,7 +50,7 @@ func (t *Tools) queryLayer(ctx context.Context, _ *mcp.CallToolRequest, in Query
 		Count:         fr.Count,
 		Features:      fr.Features,
 		ExceededLimit: fr.ExceededLimit,
-		NextOffset:    fr.NextOffset,
+		NextCursor:    fr.NextCursor,
 		Note:          fr.Note,
 	}, nil
 }
@@ -110,7 +110,7 @@ func (t *Tools) registerQuery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "query_layer",
 		Description: "Query any layer by service and layer_id (see service_info). Prefer the dataset tools, and summarize_layer for counts. " +
-			"Supports where, fields, order_by, bbox/polygon, offset paging and count_only.",
+			"Supports where, fields, order_by, bbox/polygon and count_only. Page only by passing next_cursor back as cursor.",
 	}, t.queryLayer)
 
 	mcp.AddTool(s, &mcp.Tool{
