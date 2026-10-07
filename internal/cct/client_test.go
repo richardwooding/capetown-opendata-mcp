@@ -333,3 +333,29 @@ func TestHubServiceFallsBackWhenPortalFails(t *testing.T) {
 		t.Error("ODP services must not be resolved through the portal")
 	}
 }
+
+func TestQueryLimitDistinctSkipsObjectIDTiebreaker(t *testing.T) {
+	var order atomic.Value
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/query") {
+			order.Store(r.URL.Query().Get("orderByFields"))
+			fmt.Fprint(w, `{"features":[{"properties":{"WARD_NAME":"1"}},{"properties":{"WARD_NAME":"2"}}]}`)
+			return
+		}
+		fmt.Fprint(w, `{"fields":[{"name":"OBJECTID","type":"esriFieldTypeOID"},{"name":"WARD_NAME","type":"esriFieldTypeString"}]}`)
+	})
+	c := newTestClient(t, h, 0)
+
+	feats, _, err := c.QueryLimit(context.Background(), "ODP_SPLIT_5", arcgis.QueryParams{
+		LayerID: 6, Fields: []string{"WARD_NAME"}, OrderByFields: []string{"WARD_NAME"}, ReturnDistinctValues: true,
+	}, 10)
+	if err != nil {
+		t.Fatalf("QueryLimit: %v", err)
+	}
+	if got := order.Load(); got != "WARD_NAME" {
+		t.Errorf("orderByFields = %v, want WARD_NAME without an OBJECTID tiebreaker", got)
+	}
+	if len(feats) != 2 {
+		t.Errorf("got %d distinct values, want 2", len(feats))
+	}
+}

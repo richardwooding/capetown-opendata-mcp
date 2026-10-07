@@ -20,9 +20,9 @@ type SummarizeLayerInput struct {
 	Service    string           `json:"service" jsonschema:"the service that hosts the layer: an ODP_SPLIT_* service, SERVICE_REQUESTS or BUILDING_PLANS; use service_info to discover it"`
 	LayerID    int              `json:"layer_id" jsonschema:"the layer ID within its service"`
 	GroupBy    []string         `json:"group_by,omitempty" jsonschema:"fields to group by, e.g. [\"Ward\"]; omit for a single overall total"`
-	Statistics []StatisticInput `json:"statistics,omitempty" jsonschema:"aggregates to compute; defaults to a record count named \"count\""`
+	Statistics []StatisticInput `json:"statistics,omitempty" jsonschema:"aggregates to compute; defaults to a record count named \"record_count\""`
 	Where      string           `json:"where,omitempty" jsonschema:"ArcGIS SQL WHERE filter applied before aggregating; dates use DATE 'YYYY-MM-DD'"`
-	OrderBy    []string         `json:"order_by,omitempty" jsonschema:"ordering over group or output fields, e.g. [\"count DESC\"]; defaults to the first statistic descending"`
+	OrderBy    []string         `json:"order_by,omitempty" jsonschema:"ordering over group or output fields, e.g. [\"record_count DESC\"]; defaults to the first statistic descending"`
 	Limit      int              `json:"limit,omitempty" jsonschema:"maximum number of groups to return (default 200, max 2000)"`
 }
 
@@ -32,6 +32,9 @@ type SummarizeLayerResult struct {
 	Groups        []map[string]any `json:"groups" jsonschema:"one entry per group: the group_by values plus each statistic under its output name"`
 	ExceededLimit bool             `json:"exceeded_limit" jsonschema:"true if more groups were available beyond the requested limit"`
 }
+
+// esapqa rejects "count" as an output field name, treating it as reserved.
+const recordCountName = "record_count"
 
 var statisticTypes = map[string]arcgis.StatisticType{
 	"count":  arcgis.StatCount,
@@ -104,7 +107,7 @@ func (t *Tools) buildStatistics(ctx context.Context, in SummarizeLayerInput) ([]
 			if field == "" {
 				return nil, fmt.Errorf("could not determine the record ID field to count; pass a field explicitly")
 			}
-			name = "count"
+			name = recordCountName
 		}
 		out = append(out, arcgis.Statistic{Type: st, OnField: field, OutName: name})
 	}

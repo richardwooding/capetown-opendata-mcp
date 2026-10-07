@@ -24,6 +24,9 @@ type Config struct {
 	Timeout   time.Duration
 	CacheTTL  time.Duration
 	Token     string
+	// ServerFolder is the ArcGIS REST folder for the ODP_SPLIT services; empty
+	// means the library default (esapqa).
+	ServerFolder string
 }
 
 // Server is a configured Cape Town Open Data MCP server.
@@ -36,9 +39,10 @@ type Server struct {
 // New builds a Server and registers all tools.
 func New(cfg Config) *Server {
 	client := cct.New(cct.Options{
-		Timeout:  cfg.Timeout,
-		Token:    cfg.Token,
-		CacheTTL: cfg.CacheTTL,
+		Timeout:      cfg.Timeout,
+		Token:        cfg.Token,
+		CacheTTL:     cfg.CacheTTL,
+		ServerFolder: cfg.ServerFolder,
 	})
 	m := mcp.NewServer(&mcp.Implementation{
 		Name:       cfg.Name,

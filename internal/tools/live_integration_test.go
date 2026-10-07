@@ -1,7 +1,7 @@
 //go:build integration
 
 // Live integration tests exercise the MCP tool handlers against the real City
-// of Cape Town Open Data services (split across ODP_SPLIT_1..12). They hit the
+// of Cape Town Open Data services (split across ODP_SPLIT_1..13). They hit the
 // network and are excluded from the default build; run with:
 //
 //	go test -tags=integration -v ./internal/tools/
@@ -17,6 +17,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	capetown "github.com/richardwooding/capetown-opendata"
 
 	"github.com/richardwooding/capetown-opendata-mcp/internal/cct"
 )
@@ -255,8 +257,8 @@ func TestLiveSummarize(t *testing.T) {
 	if sr.Count == 0 {
 		t.Fatal("expected complaint-type groups for ward 062")
 	}
-	if _, ok := sr.Groups[0]["count"]; !ok {
-		t.Fatalf("expected a count column, got %v", sr.Groups[0])
+	if _, ok := sr.Groups[0]["record_count"]; !ok {
+		t.Fatalf("expected a record_count column, got %v", sr.Groups[0])
 	}
 	t.Logf("ward 062 top complaint: %v", sr.Groups[0])
 
@@ -273,4 +275,34 @@ func TestLiveSummarize(t *testing.T) {
 		t.Fatal("expected zoning groups for Newlands")
 	}
 	t.Logf("Newlands top zoning: %v", lp.Groups[0])
+}
+
+// TestLiveDefaultServerHasAllSplits checks the default server (esapqa) lists
+// ODP_SPLIT_9 and ODP_SPLIT_13, both missing as feature services on citymaps.
+func TestLiveDefaultServerHasAllSplits(t *testing.T) {
+	tl := liveTools(t)
+	_, res, err := tl.serviceInfo(context.Background(), nil, ServiceInfoInput{})
+	if err != nil {
+		t.Fatalf("service_info: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, l := range res.Layers {
+		seen[l.Service] = true
+	}
+	for _, s := range []string{"ODP_SPLIT_9", "ODP_SPLIT_13"} {
+		if !seen[s] {
+			t.Errorf("expected layers from %s on the default server; unavailable: %v", s, res.Unavailable)
+		}
+	}
+}
+
+// TestLiveCityMapsServer proves the server setting takes effect: citymaps
+// still answers the existing datasets.
+func TestLiveCityMapsServer(t *testing.T) {
+	c := cct.New(cct.Options{Timeout: 90 * time.Second, MaxRetries: 3, ServerFolder: capetown.FolderCityMaps})
+	t.Cleanup(c.Close)
+	_, res, err := New(c).wards(context.Background(), nil, WardsInput{CommonQuery: CommonQuery{Limit: 1}})
+	if err != nil || res.Count != 1 {
+		t.Fatalf("wards on citymaps: count=%d err=%v", res.Count, err)
+	}
 }

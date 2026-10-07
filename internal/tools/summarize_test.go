@@ -11,8 +11,8 @@ import (
 func TestSummarizeLayerDefaultsToCountDescending(t *testing.T) {
 	var query string
 	body := `{"fields":[{"name":"ObjectId","type":"esriFieldTypeOID"}],"features":[
-		{"attributes":{"Ward":"062","count":965}},
-		{"attributes":{"Ward":"001","count":12}}
+		{"attributes":{"Ward":"062","record_count":965}},
+		{"attributes":{"Ward":"001","record_count":12}}
 	]}`
 	tools := New(capturingServerBody(t, &query, body))
 
@@ -27,16 +27,16 @@ func TestSummarizeLayerDefaultsToCountDescending(t *testing.T) {
 	if err := json.Unmarshal([]byte(q.Get("outStatistics")), &stats); err != nil {
 		t.Fatalf("outStatistics: %v (%q)", err, q.Get("outStatistics"))
 	}
-	if len(stats) != 1 || stats[0]["statisticType"] != "count" || stats[0]["onStatisticField"] != "ObjectId" || stats[0]["outStatisticFieldName"] != "count" {
+	if len(stats) != 1 || stats[0]["statisticType"] != "count" || stats[0]["onStatisticField"] != "ObjectId" || stats[0]["outStatisticFieldName"] != "record_count" {
 		t.Errorf("outStatistics = %v, want a count of ObjectId named count", stats)
 	}
 	if q.Get("groupByFieldsForStatistics") != "Ward" {
 		t.Errorf("groupBy = %q", q.Get("groupByFieldsForStatistics"))
 	}
-	if q.Get("orderByFields") != "count DESC" {
-		t.Errorf("orderByFields = %q, want count DESC with no object-ID tiebreaker", q.Get("orderByFields"))
+	if q.Get("orderByFields") != "record_count DESC" {
+		t.Errorf("orderByFields = %q, want record_count DESC with no object-ID tiebreaker", q.Get("orderByFields"))
 	}
-	if res.Count != 2 || res.Groups[0]["count"] != float64(965) {
+	if res.Count != 2 || res.Groups[0]["record_count"] != float64(965) {
 		t.Errorf("groups = %v", res.Groups)
 	}
 }
@@ -115,7 +115,7 @@ func TestValidateServiceAcceptsHubServices(t *testing.T) {
 			t.Errorf("validateService(%s): %v", s, err)
 		}
 	}
-	if err := validateService("ODP_SPLIT_13"); err == nil || !strings.Contains(err.Error(), "SERVICE_REQUESTS") {
+	if err := validateService("ODP_SPLIT_14"); err == nil || !strings.Contains(err.Error(), "SERVICE_REQUESTS") {
 		t.Errorf("want unknown-service error listing the hub services, got %v", err)
 	}
 }

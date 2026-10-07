@@ -52,10 +52,13 @@ type Options struct {
 	HTTPClient *http.Client
 	// BaseURL overrides the upstream endpoint for EVERY service (used by
 	// tests to point all split services at a single test server). When empty,
-	// each service resolves to capetown.ServiceURL(service).
+	// each service resolves under ServerFolder.
 	BaseURL string
 	// PortalURL is where hub item IDs are resolved; empty means ArcGIS Online.
 	PortalURL string
+	// ServerFolder is the ArcGIS REST folder hosting the ODP_SPLIT services;
+	// empty means capetown.BaseFolder. See ResolveServer.
+	ServerFolder string
 }
 
 // Client wraps per-service *arcgis.Client instances behind a shared TTL cache.
@@ -82,6 +85,10 @@ func New(opts Options) *Client {
 		aopts = append(aopts, arcgis.WithToken(t))
 	}
 	override := opts.BaseURL
+	folder := opts.ServerFolder
+	if folder == "" {
+		folder = capetown.BaseFolder
+	}
 	resolve := hubResolver(opts)
 	baseFor := func(service string) string {
 		if override != "" {
@@ -90,7 +97,7 @@ func New(opts Options) *Client {
 		if u, ok := resolve(service); ok {
 			return u
 		}
-		return capetown.ServiceURL(service)
+		return capetown.ServiceURLIn(folder, service)
 	}
 	retries := opts.MaxRetries
 	switch {
@@ -217,7 +224,12 @@ func (c *Client) Close() { c.cache.Stop() }
 // stable tiebreaker when one is available, and features are de-duplicated by
 // object ID across pages so an unstable upstream order can't yield duplicates.
 func (c *Client) QueryLimit(ctx context.Context, service string, p arcgis.QueryParams, limit int) ([]arcgis.Feature, bool, error) {
-	oid := c.oidField(ctx, service, p.LayerID)
+	oid := ""
+	// A distinct query returns only the selected fields, so there is no object
+	// ID to dedupe on, and esapqa rejects ordering by a field not returned.
+	if !p.ReturnDistinctValues {
+		oid = c.oidField(ctx, service, p.LayerID)
+	}
 	if oid != "" && !containsField(p.OrderByFields, oid) {
 		p.OrderByFields = append(append([]string{}, p.OrderByFields...), oid)
 	}

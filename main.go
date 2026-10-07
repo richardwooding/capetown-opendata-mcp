@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/richardwooding/capetown-opendata-mcp/internal/cct"
 	"github.com/richardwooding/capetown-opendata-mcp/internal/server"
 )
 
@@ -36,6 +37,7 @@ func run() error {
 		timeout     = fs.Duration("timeout", envDuration("CAPETOWN_MCP_TIMEOUT", 30*time.Second), "per-request upstream timeout")
 		cacheTTL    = fs.Duration("cache-ttl", envDuration("CAPETOWN_MCP_CACHE_TTL", 5*time.Minute), "response cache TTL (0 disables caching)")
 		token       = fs.String("arcgis-token", os.Getenv("CAPETOWN_MCP_ARCGIS_TOKEN"), "optional ArcGIS token for authenticated services")
+		serverName  = fs.String("server", env("CAPETOWN_MCP_SERVER", cct.DefaultServer), "City server for the ODP_SPLIT services: esapqa, citymaps, or an https ArcGIS REST services folder URL")
 		showVersion = fs.Bool("version", false, "print version and exit")
 	)
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -46,17 +48,23 @@ func run() error {
 		return nil
 	}
 
+	folder, err := cct.ResolveServer(*serverName)
+	if err != nil {
+		return err
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	srv := server.New(server.Config{
-		Name:      "capetown-opendata",
-		Version:   version,
-		Transport: *transport,
-		HTTPAddr:  *httpAddr,
-		Timeout:   *timeout,
-		CacheTTL:  *cacheTTL,
-		Token:     *token,
+		Name:         "capetown-opendata",
+		Version:      version,
+		Transport:    *transport,
+		HTTPAddr:     *httpAddr,
+		Timeout:      *timeout,
+		CacheTTL:     *cacheTTL,
+		Token:        *token,
+		ServerFolder: folder,
 	})
 	return srv.Run(ctx)
 }

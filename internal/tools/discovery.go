@@ -87,7 +87,7 @@ func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerI
 func (t *Tools) registerDiscovery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "service_info",
-		Description: "List every layer and table across the Cape Town Open Data portal, each tagged with the service that hosts it. The portal is split across a dozen ODP_SPLIT_* services, plus the SERVICE_REQUESTS and BUILDING_PLANS tables on ArcGIS Online; this aggregates them into one catalogue. Use it to discover the service + layer_id to pass to layer_info, query_layer and summarize_layer. The portal publishes more than 130 layers; pass name_contains to filter by name (e.g. \"water\").",
+		Description: "List every layer and table across the Cape Town Open Data portal, each tagged with the service that hosts it. The portal is split across thirteen ODP_SPLIT_* services, plus the SERVICE_REQUESTS and BUILDING_PLANS tables on ArcGIS Online; this aggregates them into one catalogue. Use it to discover the service + layer_id to pass to layer_info, query_layer and summarize_layer. The portal publishes more than 130 layers; pass name_contains to filter by name (e.g. \"water\").",
 	}, t.serviceInfo)
 
 	mcp.AddTool(s, &mcp.Tool{

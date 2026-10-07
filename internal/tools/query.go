@@ -104,7 +104,7 @@ func (t *Tools) registerQuery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "query_layer",
 		Description: "Generic escape hatch to query any layer of the Cape Town Open Data portal by its service and layer ID. " +
-			"Prefer the dedicated dataset tools when one exists, and summarize_layer for counts. The portal is split across services named ODP_SPLIT_1..ODP_SPLIT_12, plus SERVICE_REQUESTS and BUILDING_PLANS hosted on ArcGIS Online; " +
+			"Prefer the dedicated dataset tools when one exists, and summarize_layer for counts. The portal is split across services named ODP_SPLIT_1..ODP_SPLIT_13, plus SERVICE_REQUESTS and BUILDING_PLANS hosted on ArcGIS Online; " +
 			"use service_info to discover which service and layer_id you need. Supports a SQL WHERE filter, field selection, ordering, a bounding box, offset pagination, and count-only mode.",
 	}, t.queryLayer)
 
@@ -119,6 +119,6 @@ func (t *Tools) registerQuery(s *mcp.Server) {
 		Description: "Aggregate any layer on the server side: counts, sums, averages, minimums and maximums, optionally grouped by fields. " +
 			"Use it instead of paging through rows whenever the question is \"how many\", \"which most\" or \"total\" — essential for the 5-million-row " +
 			"SERVICE_REQUESTS table. Example: service=SERVICE_REQUESTS, layer_id=0, group_by=[\"C3_Complaint_Type\"], " +
-			"where=\"Ward = '062' AND Created_On_Date >= DATE '2026-01-01'\". With no statistics it counts records per group, largest first.",
+			"where=\"Ward = '062' AND Created_On_Date >= DATE '2026-01-01'\". With no statistics it counts records per group into record_count, largest first.",
 	}, t.summarizeLayer)
 }

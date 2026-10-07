@@ -116,6 +116,7 @@ func buildManifest(goos, version string) Manifest {
 					"--transport", "stdio",
 					"--timeout", "${user_config.timeout}",
 					"--cache-ttl", "${user_config.cache_ttl}",
+					"--server", "${user_config.server}",
 				},
 				Env: map[string]string{
 					"CAPETOWN_MCP_ARCGIS_TOKEN": "${user_config.arcgis_token}",
@@ -141,6 +142,12 @@ func buildManifest(goos, version string) Manifest {
 				Title:       "Cache TTL",
 				Description: "Response cache TTL (Go duration; 0 disables caching)",
 				Default:     "5m",
+			},
+			"server": {
+				Type:        "string",
+				Title:       "City server",
+				Description: "Which City of Cape Town ArcGIS server to read: esapqa (default), citymaps, or an https ArcGIS REST services folder URL",
+				Default:     "esapqa",
 			},
 		},
 		Compatibility: &Compatibility{Platforms: []string{manifestPlatform(goos)}},

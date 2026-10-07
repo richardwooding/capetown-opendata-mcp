@@ -1,7 +1,7 @@
 # capetown-opendata-mcp
 
 A comprehensive [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that
-exposes the [City of Cape Town Open Data Portal](https://citymaps.capetown.gov.za) to MCP
+exposes the [City of Cape Town Open Data Portal](https://odp-cctegis.opendata.arcgis.com) to MCP
 clients such as Claude Desktop, Claude Code, and any other MCP-compatible host.
 
 It wraps [`capetown-opendata`](https://github.com/richardwooding/capetown-opendata) and
@@ -38,8 +38,11 @@ Every feature-returning tool except the two non-spatial tables accepts a shared 
 `use_aliases` (rename raw column names to their human-readable field aliases). Spatial filters are
 sent as WGS84 (`inSR=4326`), so they work against layers stored in any projection.
 
-> **Note:** The City of Cape Town publishes its Open Data across a dozen split feature services
-> (`ODP_SPLIT_1` … `ODP_SPLIT_12`); a layer is addressed by both a `service` and a `layer_id`.
+> **Note:** The City of Cape Town publishes its Open Data across thirteen split feature services
+> (`ODP_SPLIT_1` … `ODP_SPLIT_13`); a layer is addressed by both a `service` and a `layer_id`.
+> The City serves them from two ArcGIS servers. The default is `esapqa.capetown.gov.za`, which the
+> City's open data hub links to and which carries `ODP_SPLIT_9` and `ODP_SPLIT_13`; switch with
+> `--server citymaps` (record counts differ between the two on some layers).
 > `service_info` aggregates all of them into one catalogue (each entry tagged with its host
 > service), and reports any split that is temporarily unavailable. Use it to discover the
 > `service` + `layer_id` to pass to `layer_info`, `field_values`, and `query_layer`. Published IDs
@@ -121,6 +124,7 @@ All flags can also be set via environment variables (prefix `CAPETOWN_MCP_`):
 | `--timeout` | `CAPETOWN_MCP_TIMEOUT` | `30s` | Per-request upstream timeout. |
 | `--cache-ttl` | `CAPETOWN_MCP_CACHE_TTL` | `5m` | Response cache TTL (`0` disables caching). |
 | `--arcgis-token` | `CAPETOWN_MCP_ARCGIS_TOKEN` | _(none)_ | Optional ArcGIS token for authenticated services. |
+| `--server` | `CAPETOWN_MCP_SERVER` | `esapqa` | City server for the `ODP_SPLIT_*` services: `esapqa`, `citymaps`, or an `https://…/rest/services/<folder>` URL. |
 
 ## Development
 
