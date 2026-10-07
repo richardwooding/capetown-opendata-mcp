@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"slices"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -16,9 +18,14 @@ import (
 )
 
 const (
-	defaultLimit = 200
+	defaultLimit = 25
 	maxLimit     = 2000
+	// maxResponseChars keeps a result near 8,000 tokens, under the warning
+	// threshold MCP clients such as Claude Code apply to tool output.
+	maxResponseChars = 32_000
 )
+
+const trimmedNote = "Trimmed to fit the response size budget. Page with next_offset, select fewer fields, or use summarize_layer for counts."
 
 // Tools holds the dependencies shared by all tool handlers.
 type Tools struct {
@@ -30,14 +37,36 @@ func New(client *cct.Client) *Tools { return &Tools{client: client} }
 
 // CommonQuery holds filters shared by every feature-returning tool.
 type CommonQuery struct {
-	Limit           int           `json:"limit,omitempty" jsonschema:"maximum number of features to return (default 200, max 2000)"`
-	Offset          int           `json:"offset,omitempty" jsonschema:"number of features to skip before returning results; use the next_offset from a previous response to page through a layer"`
-	Where           string        `json:"where,omitempty" jsonschema:"additional ArcGIS SQL WHERE filter, AND-combined with the dataset's default filter (e.g. \"OBJECTID > 100\"); use layer_info to find valid field names"`
-	BBox            []float64     `json:"bbox,omitempty" jsonschema:"spatial bounding-box filter as [minLon, minLat, maxLon, maxLat] in WGS84 degrees"`
-	Polygon         [][][]float64 `json:"polygon,omitempty" jsonschema:"spatial filter as polygon rings [[[lon,lat],...],...] in WGS84; returns features intersecting the polygon. An alternative to bbox for irregular areas such as a ward boundary; if both are given, bbox is used"`
-	IncludeGeometry bool          `json:"include_geometry,omitempty" jsonschema:"include feature geometry in the response (default false, which yields smaller attribute-only payloads)"`
-	OmitNulls       bool          `json:"omit_nulls,omitempty" jsonschema:"drop attributes whose value is null from each returned feature, yielding smaller payloads"`
-	UseAliases      bool          `json:"use_aliases,omitempty" jsonschema:"rename each attribute from its raw column name to its human-readable field alias (from layer_info); makes cryptic field names readable"`
+	Limit           int           `json:"limit,omitempty" jsonschema:"max features (default 25, max 2000)"`
+	Offset          int           `json:"offset,omitempty" jsonschema:"features to skip; pass next_offset to page"`
+	Where           string        `json:"where,omitempty" jsonschema:"extra SQL filter; field names via layer_info"`
+	Fields          []string      `json:"fields,omitempty" jsonschema:"columns to return; omit for all"`
+	BBox            []float64     `json:"bbox,omitempty" jsonschema:"[minLon, minLat, maxLon, maxLat] in WGS84"`
+	Polygon         [][][]float64 `json:"polygon,omitempty" jsonschema:"WGS84 rings [[[lon,lat],...]]; bbox wins if both set"`
+	IncludeGeometry bool          `json:"include_geometry,omitempty" jsonschema:"include GeoJSON geometry (default false)"`
+	OmitNulls       *bool         `json:"omit_nulls,omitempty" jsonschema:"drop null and empty values (default true)"`
+	UseAliases      bool          `json:"use_aliases,omitempty" jsonschema:"use readable field aliases as keys"`
+}
+
+type rowOptions struct {
+	geometry  bool
+	omitNulls bool
+	keepShape bool
+}
+
+func (c CommonQuery) rowOptions() rowOptions {
+	return rowOptions{
+		geometry:  c.IncludeGeometry,
+		omitNulls: c.OmitNulls == nil || *c.OmitNulls,
+		keepShape: c.IncludeGeometry || slices.ContainsFunc(c.Fields, isShapeColumn),
+	}
+}
+
+// isShapeColumn matches the area and length columns ArcGIS derives from the
+// geometry (Shape__Area, Shape.STArea(), ...), which are noise without it.
+func isShapeColumn(name string) bool {
+	n := strings.ToLower(name)
+	return strings.HasPrefix(n, "shape__") || strings.HasPrefix(n, "shape.st")
 }
 
 // Feature is a single returned feature.
@@ -50,8 +79,9 @@ type Feature struct {
 type FeatureResult struct {
 	Count         int       `json:"count" jsonschema:"number of features returned"`
 	Features      []Feature `json:"features" jsonschema:"the returned features"`
-	ExceededLimit bool      `json:"exceeded_limit" jsonschema:"true if more features were available beyond the requested limit"`
-	NextOffset    *int      `json:"next_offset,omitempty" jsonschema:"offset to pass on the next call to fetch the following page; present only when exceeded_limit is true"`
+	ExceededLimit bool      `json:"exceeded_limit" jsonschema:"true if more features are available"`
+	NextOffset    *int      `json:"next_offset,omitempty" jsonschema:"offset for the next page"`
+	Note          string    `json:"note,omitempty" jsonschema:"set when the page was trimmed to fit the size budget"`
 }
 
 // run applies the common filters to a base query, executes it against the given
@@ -62,15 +92,32 @@ func (t *Tools) run(ctx context.Context, service string, base arcgis.QueryParams
 	if err != nil {
 		return nil, FeatureResult{}, annotateErr(err, service, base.LayerID)
 	}
-	res := toResult(feats, more, c.IncludeGeometry, c.OmitNulls)
+	res := toResult(feats, more, c.rowOptions())
 	if c.UseAliases {
 		t.applyAliases(ctx, service, base.LayerID, res.Features)
 	}
-	if more {
+	if n := fitCount(res.Features); n < len(res.Features) {
+		res.Features, res.Count, res.ExceededLimit, res.Note = res.Features[:n], n, true, trimmedNote
+	}
+	if res.ExceededLimit {
 		next := c.Offset + res.Count
 		res.NextOffset = &next
 	}
 	return nil, res, nil
+}
+
+// fitCount returns how many leading items fit in maxResponseChars of JSON,
+// always at least one so a single wide row still comes back.
+func fitCount[T any](items []T) int {
+	size := 0
+	for i, it := range items {
+		b, _ := json.Marshal(it)
+		size += len(b) + 1
+		if size > maxResponseChars && i > 0 {
+			return i
+		}
+	}
+	return len(items)
 }
 
 // applyAliases rewrites each feature's attribute keys from raw column names to
@@ -120,6 +167,9 @@ func applyCommon(p arcgis.QueryParams, c CommonQuery) arcgis.QueryParams {
 	} else if len(c.Polygon) > 0 {
 		p.Polygon = &arcgis.Polygon{Rings: c.Polygon}
 	}
+	if len(c.Fields) > 0 {
+		p.Fields = c.Fields
+	}
 	if c.Offset > 0 {
 		p.ResultOffset = c.Offset
 	}
@@ -144,18 +194,14 @@ func effectiveLimit(n int) int {
 }
 
 // toResult converts raw features into the structured tool output.
-func toResult(feats []arcgis.Feature, more, includeGeometry, omitNulls bool) FeatureResult {
+func toResult(feats []arcgis.Feature, more bool, opts rowOptions) FeatureResult {
 	out := FeatureResult{Count: len(feats), ExceededLimit: more, Features: make([]Feature, 0, len(feats))}
 	for _, f := range feats {
-		attrs := f.Attrs()
-		if omitNulls {
-			attrs = nonNullAttrs(attrs)
-		}
-		fe := Feature{Attributes: attrs}
-		if includeGeometry && len(f.Geometry) > 0 {
+		fe := Feature{Attributes: leanAttrs(f.Attrs(), opts)}
+		if opts.geometry && len(f.Geometry) > 0 {
 			var g any
 			if json.Unmarshal(f.Geometry, &g) == nil {
-				fe.Geometry = g
+				fe.Geometry = roundCoords(g)
 			}
 		}
 		out.Features = append(out.Features, fe)
@@ -163,15 +209,36 @@ func toResult(feats []arcgis.Feature, more, includeGeometry, omitNulls bool) Fea
 	return out
 }
 
-// nonNullAttrs returns a copy of attrs with nil-valued entries removed.
-func nonNullAttrs(attrs map[string]any) map[string]any {
+func leanAttrs(attrs map[string]any, opts rowOptions) map[string]any {
 	out := make(map[string]any, len(attrs))
 	for k, v := range attrs {
-		if v != nil {
-			out[k] = v
+		if opts.omitNulls && (v == nil || v == "") {
+			continue
 		}
+		if !opts.keepShape && isShapeColumn(k) {
+			continue
+		}
+		out[k] = v
 	}
 	return out
+}
+
+// roundCoords trims GeoJSON coordinates to 6 decimal places (about 10 cm),
+// which nearly halves polygon payloads without visible loss.
+func roundCoords(v any) any {
+	switch x := v.(type) {
+	case float64:
+		return math.Round(x*1e6) / 1e6
+	case []any:
+		for i := range x {
+			x[i] = roundCoords(x[i])
+		}
+	case map[string]any:
+		for k := range x {
+			x[k] = roundCoords(x[k])
+		}
+	}
+	return v
 }
 
 // annotateErr wraps an upstream query error with guidance the caller can act on.

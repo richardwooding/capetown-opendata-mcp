@@ -100,15 +100,16 @@ func (t *Tools) heritageInventory(ctx context.Context, _ *mcp.CallToolRequest, i
 // TableQuery holds the filters for non-spatial tables, which take no spatial
 // filter or geometry.
 type TableQuery struct {
-	Limit      int    `json:"limit,omitempty" jsonschema:"maximum number of rows to return (default 200, max 2000)"`
-	Offset     int    `json:"offset,omitempty" jsonschema:"number of rows to skip; use next_offset from a previous response to page"`
-	Where      string `json:"where,omitempty" jsonschema:"ArcGIS SQL WHERE filter; dates use DATE 'YYYY-MM-DD'; use layer_info for field names"`
-	OmitNulls  bool   `json:"omit_nulls,omitempty" jsonschema:"drop attributes whose value is null from each row"`
-	UseAliases bool   `json:"use_aliases,omitempty" jsonschema:"rename raw column names to their human-readable aliases"`
+	Limit      int      `json:"limit,omitempty" jsonschema:"max rows (default 25, max 2000)"`
+	Offset     int      `json:"offset,omitempty" jsonschema:"rows to skip; pass next_offset to page"`
+	Where      string   `json:"where,omitempty" jsonschema:"SQL filter; dates as DATE 'YYYY-MM-DD'"`
+	Fields     []string `json:"fields,omitempty" jsonschema:"columns to return; omit for all"`
+	OmitNulls  *bool    `json:"omit_nulls,omitempty" jsonschema:"drop null and empty values (default true)"`
+	UseAliases bool     `json:"use_aliases,omitempty" jsonschema:"use readable field aliases as keys"`
 }
 
 func (q TableQuery) common() CommonQuery {
-	return CommonQuery{Limit: q.Limit, Offset: q.Offset, Where: q.Where, OmitNulls: q.OmitNulls, UseAliases: q.UseAliases}
+	return CommonQuery{Limit: q.Limit, Offset: q.Offset, Where: q.Where, Fields: q.Fields, OmitNulls: q.OmitNulls, UseAliases: q.UseAliases}
 }
 
 // ServiceRequestsInput is the input for the service_requests tool.

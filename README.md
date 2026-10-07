@@ -30,13 +30,19 @@ and attribute filtering, and in-memory response caching.
 | `layer_info` | Describe a layer's fields, geometry type, and page size (`service` + `layer_id`). |
 | `summarize_layer` | Server-side counts, sums, averages, minimums and maximums over any layer, optionally grouped (`service` + `layer_id`, `group_by`, `statistics`, `where`). |
 
-Every feature-returning tool except the two non-spatial tables accepts a shared set of filters: `limit` (default 200, max 2000),
-`offset` (skip N features; pair with the `next_offset` in the response to page through a layer),
-`where` (extra SQL filter, AND-combined), `bbox` (`[minLon, minLat, maxLon, maxLat]` in WGS84),
-`polygon` (rings `[[[lon,lat],…],…]` in WGS84, for irregular areas like a ward boundary),
-`include_geometry` (default `false`), `omit_nulls` (drop null-valued attributes), and
-`use_aliases` (rename raw column names to their human-readable field aliases). Spatial filters are
-sent as WGS84 (`inSR=4326`), so they work against layers stored in any projection.
+Every feature-returning tool accepts a shared set of filters: `limit` (default 25, max 2000),
+`offset` (pair with the `next_offset` in the response to page through a layer), `where` (extra SQL
+filter, AND-combined), `fields` (only these columns), `omit_nulls` (default `true`: drop null and
+empty values), and `use_aliases` (rename raw column names to their human-readable aliases). The
+spatial tools also take `bbox` (`[minLon, minLat, maxLon, maxLat]` in WGS84), `polygon` (rings
+`[[[lon,lat],…],…]` in WGS84) and `include_geometry` (default `false`). Spatial filters are sent as
+WGS84 (`inSR=4326`), so they work against layers stored in any projection.
+
+**Response size.** Results are kept small enough for MCP clients' tool-output limits. Rows drop
+null values and the geometry-derived `Shape__*` columns by default, geometry coordinates are rounded
+to 6 decimal places (about 10 cm), and every response is capped at roughly 8,000 tokens. A page cut
+short by that cap still sets `exceeded_limit` and `next_offset`, plus a `note` saying so; select
+fewer `fields` or use `summarize_layer` when you only need counts.
 
 > **Note:** The City of Cape Town publishes its Open Data across thirteen split feature services
 > (`ODP_SPLIT_1` … `ODP_SPLIT_13`); a layer is addressed by both a `service` and a `layer_id`.

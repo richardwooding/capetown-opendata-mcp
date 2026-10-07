@@ -11,13 +11,14 @@ import (
 
 // ServiceInfoInput is the input for the service_info tool.
 type ServiceInfoInput struct {
-	NameContains string `json:"name_contains,omitempty" jsonschema:"case-insensitive substring; when set, only layers and tables whose name contains it are returned"`
+	NameContains string `json:"name_contains,omitempty" jsonschema:"case-insensitive name filter, e.g. \"water\""`
 }
 
 // ServiceInfoResult is the merged layer catalogue across every split service.
 type ServiceInfoResult struct {
-	Layers      []cct.ServiceLayer       `json:"layers" jsonschema:"all layers and tables across every service, each tagged with the service that hosts it (feed service + id to layer_info and query_layer)"`
-	Unavailable []cct.UnavailableService `json:"unavailable,omitempty" jsonschema:"split services that could not be listed right now (e.g. stopped or mid-restructure upstream)"`
+	Layers      []cct.ServiceLayer       `json:"layers" jsonschema:"layers and tables, each with its service and id"`
+	Unavailable []cct.UnavailableService `json:"unavailable,omitempty" jsonschema:"services that could not be listed right now"`
+	Note        string                   `json:"note,omitempty" jsonschema:"set when trimmed; narrow with name_contains"`
 }
 
 func (t *Tools) serviceInfo(ctx context.Context, _ *mcp.CallToolRequest, in ServiceInfoInput) (*mcp.CallToolResult, ServiceInfoResult, error) {
@@ -32,6 +33,9 @@ func (t *Tools) serviceInfo(ctx context.Context, _ *mcp.CallToolRequest, in Serv
 			out.Layers = append(out.Layers, l)
 		}
 	}
+	if n := fitCount(out.Layers); n < len(out.Layers) {
+		out.Layers, out.Note = out.Layers[:n], "Trimmed to fit the response size budget; narrow the listing with name_contains."
+	}
 	return nil, out, nil
 }
 
@@ -44,8 +48,8 @@ type FieldInfo struct {
 
 // LayerInfoInput is the input for the layer_info tool.
 type LayerInfoInput struct {
-	Service string `json:"service" jsonschema:"the service that hosts the layer: an ODP_SPLIT_* service (e.g. \"ODP_SPLIT_5\"), SERVICE_REQUESTS or BUILDING_PLANS; use service_info to discover it"`
-	LayerID int    `json:"layer_id" jsonschema:"the layer ID within its service to describe"`
+	Service string `json:"service" jsonschema:"ODP_SPLIT_*, SERVICE_REQUESTS or BUILDING_PLANS (see service_info)"`
+	LayerID int    `json:"layer_id" jsonschema:"layer ID within the service"`
 }
 
 // LayerInfoResult describes a single layer's schema.
@@ -87,11 +91,11 @@ func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerI
 func (t *Tools) registerDiscovery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "service_info",
-		Description: "List every layer and table across the Cape Town Open Data portal, each tagged with the service that hosts it. The portal is split across thirteen ODP_SPLIT_* services, plus the SERVICE_REQUESTS and BUILDING_PLANS tables on ArcGIS Online; this aggregates them into one catalogue. Use it to discover the service + layer_id to pass to layer_info, query_layer and summarize_layer. The portal publishes more than 130 layers; pass name_contains to filter by name (e.g. \"water\").",
+		Description: "List every layer and table in the Cape Town Open Data portal with the service that hosts it: thirteen ODP_SPLIT_* services plus the SERVICE_REQUESTS and BUILDING_PLANS tables. Use it to find the service + layer_id for other tools; name_contains filters by name.",
 	}, t.serviceInfo)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "layer_info",
-		Description: "Describe a single layer: its field names/types, geometry type, and maximum page size. Use this to learn which fields are valid for where/fields/order_by. Requires the layer's service (see service_info).",
+		Description: "Describe a layer's fields, geometry type and page size, to find valid names for where, fields and order_by.",
 	}, t.layerInfo)
 }

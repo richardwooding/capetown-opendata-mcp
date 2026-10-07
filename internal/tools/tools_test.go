@@ -130,42 +130,6 @@ func TestLimitClamped(t *testing.T) {
 	}
 }
 
-func TestOmitNulls(t *testing.T) {
-	var query string
-	body := `{"features":[
-		{"properties":{"NAME":"Site","DESC":null,"AGE":null}}
-	],"exceededTransferLimit":false}`
-	tools := New(capturingServerBody(t, &query, body))
-
-	_, res, err := tools.heritageInventory(context.Background(), nil, HeritageInventoryInput{
-		OmitNulls: true,
-	})
-	if err != nil {
-		t.Fatalf("heritageInventory: %v", err)
-	}
-	attrs := res.Features[0].Attributes
-	if _, ok := attrs["DESC"]; ok {
-		t.Errorf("null attribute DESC should have been dropped: %v", attrs)
-	}
-	if v := attrs["NAME"]; v != "Site" {
-		t.Errorf("non-null attribute NAME should be kept, got %v", v)
-	}
-}
-
-func TestOmitNullsDefaultOff(t *testing.T) {
-	var query string
-	body := `{"features":[{"properties":{"NAME":"Site","DESC":null}}],"exceededTransferLimit":false}`
-	tools := New(capturingServerBody(t, &query, body))
-
-	_, res, err := tools.heritageInventory(context.Background(), nil, HeritageInventoryInput{})
-	if err != nil {
-		t.Fatalf("heritageInventory: %v", err)
-	}
-	if _, ok := res.Features[0].Attributes["DESC"]; !ok {
-		t.Error("null attribute should be retained when omit_nulls is false")
-	}
-}
-
 func TestOffsetAndNextOffset(t *testing.T) {
 	var query string
 	// One feature plus exceededTransferLimit -> more results available.

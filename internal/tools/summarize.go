@@ -11,26 +11,27 @@ import (
 
 // StatisticInput is one aggregate to compute.
 type StatisticInput struct {
-	Type  string `json:"type" jsonschema:"aggregate function: count, sum, avg, min, max, stddev or var"`
-	Field string `json:"field,omitempty" jsonschema:"field to aggregate; may be omitted for count, which then counts records"`
+	Type  string `json:"type" jsonschema:"count, sum, avg, min, max, stddev or var"`
+	Field string `json:"field,omitempty" jsonschema:"field to aggregate; optional for count"`
 }
 
 // SummarizeLayerInput is the input for the summarize_layer tool.
 type SummarizeLayerInput struct {
-	Service    string           `json:"service" jsonschema:"the service that hosts the layer: an ODP_SPLIT_* service, SERVICE_REQUESTS or BUILDING_PLANS; use service_info to discover it"`
-	LayerID    int              `json:"layer_id" jsonschema:"the layer ID within its service"`
-	GroupBy    []string         `json:"group_by,omitempty" jsonschema:"fields to group by, e.g. [\"Ward\"]; omit for a single overall total"`
-	Statistics []StatisticInput `json:"statistics,omitempty" jsonschema:"aggregates to compute; defaults to a record count named \"record_count\""`
-	Where      string           `json:"where,omitempty" jsonschema:"ArcGIS SQL WHERE filter applied before aggregating; dates use DATE 'YYYY-MM-DD'"`
-	OrderBy    []string         `json:"order_by,omitempty" jsonschema:"ordering over group or output fields, e.g. [\"record_count DESC\"]; defaults to the first statistic descending"`
-	Limit      int              `json:"limit,omitempty" jsonschema:"maximum number of groups to return (default 200, max 2000)"`
+	Service    string           `json:"service" jsonschema:"ODP_SPLIT_*, SERVICE_REQUESTS or BUILDING_PLANS (see service_info)"`
+	LayerID    int              `json:"layer_id" jsonschema:"layer ID within the service"`
+	GroupBy    []string         `json:"group_by,omitempty" jsonschema:"fields to group by; omit for one total"`
+	Statistics []StatisticInput `json:"statistics,omitempty" jsonschema:"aggregates; default is record_count"`
+	Where      string           `json:"where,omitempty" jsonschema:"SQL filter applied first; dates as DATE 'YYYY-MM-DD'"`
+	OrderBy    []string         `json:"order_by,omitempty" jsonschema:"default: first statistic descending"`
+	Limit      int              `json:"limit,omitempty" jsonschema:"max groups (default 25, max 2000)"`
 }
 
 // SummarizeLayerResult holds one row per group.
 type SummarizeLayerResult struct {
-	Count         int              `json:"count" jsonschema:"number of groups returned"`
-	Groups        []map[string]any `json:"groups" jsonschema:"one entry per group: the group_by values plus each statistic under its output name"`
-	ExceededLimit bool             `json:"exceeded_limit" jsonschema:"true if more groups were available beyond the requested limit"`
+	Count         int              `json:"count" jsonschema:"groups returned"`
+	Groups        []map[string]any `json:"groups" jsonschema:"group_by values plus each statistic"`
+	ExceededLimit bool             `json:"exceeded_limit" jsonschema:"true if more groups are available"`
+	Note          string           `json:"note,omitempty" jsonschema:"set when trimmed to fit the size budget"`
 }
 
 // esapqa rejects "count" as an output field name, treating it as reserved.
@@ -77,12 +78,15 @@ func (t *Tools) summarizeLayer(ctx context.Context, _ *mcp.CallToolRequest, in S
 	for _, f := range fs.Features {
 		groups = append(groups, f.Attrs())
 	}
-	more := fs.ExceededTransferLimit
-	if len(groups) > limit {
-		groups = groups[:limit]
-		more = true
+	res := SummarizeLayerResult{Groups: groups, ExceededLimit: fs.ExceededTransferLimit}
+	if len(res.Groups) > limit {
+		res.Groups, res.ExceededLimit = res.Groups[:limit], true
 	}
-	return nil, SummarizeLayerResult{Count: len(groups), Groups: groups, ExceededLimit: more}, nil
+	if n := fitCount(res.Groups); n < len(res.Groups) {
+		res.Groups, res.ExceededLimit, res.Note = res.Groups[:n], true, trimmedNote
+	}
+	res.Count = len(res.Groups)
+	return nil, res, nil
 }
 
 func (t *Tools) buildStatistics(ctx context.Context, in SummarizeLayerInput) ([]arcgis.Statistic, error) {
