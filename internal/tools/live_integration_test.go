@@ -362,3 +362,33 @@ func TestLiveCursorPaging(t *testing.T) {
 		srIn.Cursor = res.NextCursor
 	}
 }
+
+// TestLiveLayerInfoDataRange checks the ArcGIS Online tables report a readable
+// name and a data range that runs past the date in their stale table names.
+func TestLiveLayerInfoDataRange(t *testing.T) {
+	tl := liveTools(t)
+	for svc, stale := range map[string]string{"SERVICE_REQUESTS": "2026-05-20", "BUILDING_PLANS": "2025-12-31"} {
+		_, res, err := tl.layerInfo(context.Background(), nil, LayerInfoInput{Service: svc, LayerID: 0})
+		if err != nil {
+			t.Fatalf("%s layer_info: %v", svc, err)
+		}
+		if strings.Contains(res.Name, "_") || res.DataRange == nil {
+			t.Fatalf("%s: name=%q data_range=%+v", svc, res.Name, res.DataRange)
+		}
+		if res.DataRange.Latest <= stale {
+			t.Errorf("%s latest %s should be after the stale name's %s", svc, res.DataRange.Latest, stale)
+		}
+		t.Logf("%s: %s, %s to %s", svc, res.Name, res.DataRange.Earliest, res.DataRange.Latest)
+	}
+}
+
+// TestLiveSummarizeWithoutGroupBy checks a single overall total works on an
+// ArcGIS Online table, which rejects paging parameters on ungrouped statistics.
+func TestLiveSummarizeWithoutGroupBy(t *testing.T) {
+	tl := liveTools(t)
+	_, res, err := tl.summarizeLayer(context.Background(), nil, SummarizeLayerInput{Service: "SERVICE_REQUESTS", LayerID: 0, Where: "Ward = '062'"})
+	if err != nil || res.Count != 1 {
+		t.Fatalf("ungrouped summarize: count=%d err=%v", res.Count, err)
+	}
+	t.Logf("ward 062 total: %v", res.Groups[0])
+}

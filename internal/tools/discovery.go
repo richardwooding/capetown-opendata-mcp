@@ -3,8 +3,11 @@ package tools
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	capetown "github.com/richardwooding/capetown-opendata"
+	arcgis "github.com/richardwooding/go-arcgis"
 
 	"github.com/richardwooding/capetown-opendata-mcp/internal/cct"
 )
@@ -62,6 +65,50 @@ type LayerInfoResult struct {
 	GeometryType   string      `json:"geometry_type"`
 	MaxRecordCount int         `json:"max_record_count" jsonschema:"the server's maximum features per page"`
 	Fields         []FieldInfo `json:"fields"`
+	DataRange      *DataRange  `json:"data_range,omitempty" jsonschema:"earliest and latest record dates for time-bound tables; judge how current the data is from this, never from a table name"`
+}
+
+// DataRange is the span of a table's records on its main date field.
+type DataRange struct {
+	Field    string `json:"field"`
+	Earliest string `json:"earliest" jsonschema:"YYYY-MM-DD"`
+	Latest   string `json:"latest" jsonschema:"YYYY-MM-DD"`
+}
+
+// capeTown is SAST (UTC+2, no daylight saving). The City stores dates as local
+// midnight, so formatting in UTC would shift every date back a day.
+var capeTown = time.FixedZone("SAST", 2*60*60)
+
+// The ArcGIS Online tables are refreshed in place under names that embed old
+// dates, so their real coverage is measured from the data itself.
+var dateFields = map[string]string{
+	capetown.ServiceServiceRequests: "Created_On_Date",
+	capetown.ServiceBuildingPlans:   "Submission_Date",
+}
+
+func (t *Tools) dataRange(ctx context.Context, service string, layerID int) *DataRange {
+	field, ok := dateFields[service]
+	if !ok {
+		return nil
+	}
+	fs, err := t.client.Statistics(ctx, service, arcgis.QueryParams{
+		LayerID: layerID,
+		OutStatistics: []arcgis.Statistic{
+			{Type: arcgis.StatMin, OnField: field, OutName: "earliest"},
+			{Type: arcgis.StatMax, OnField: field, OutName: "latest"},
+		},
+	})
+	if err != nil || len(fs.Features) == 0 {
+		return nil
+	}
+	attrs := fs.Features[0].Attrs()
+	lo, okLo := asInt64(attrs["earliest"])
+	hi, okHi := asInt64(attrs["latest"])
+	if !okLo || !okHi {
+		return nil
+	}
+	day := func(ms int64) string { return time.UnixMilli(ms).In(capeTown).Format(time.DateOnly) }
+	return &DataRange{Field: field, Earliest: day(lo), Latest: day(hi)}
 }
 
 func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerInfoInput) (*mcp.CallToolResult, LayerInfoResult, error) {
@@ -75,7 +122,7 @@ func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerI
 	out := LayerInfoResult{
 		Service:        in.Service,
 		ID:             info.ID,
-		Name:           info.Name,
+		Name:           cct.LayerLabel(in.Service, info.Name),
 		Type:           info.Type,
 		Description:    info.Description,
 		GeometryType:   info.GeometryType,
@@ -85,6 +132,7 @@ func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerI
 	for _, f := range info.Fields {
 		out.Fields = append(out.Fields, FieldInfo{Name: f.Name, Type: f.Type, Alias: f.Alias})
 	}
+	out.DataRange = t.dataRange(ctx, in.Service, in.LayerID)
 	return nil, out, nil
 }
 

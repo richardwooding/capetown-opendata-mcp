@@ -174,6 +174,7 @@ func (t *Tools) registerDatasets(s *mcp.Server) {
 		Description: "Citizen service requests (C3 notifications) logged with the City since 2023, most recently loaded first: about 5 million rows, refreshed regularly. " +
 			"A non-spatial table with ward, suburb, sub-council, complaint type, work centre and created/completed dates. " +
 			"Ward is a zero-padded string (Ward = '062'); roughly a third of rows carry a placeholder ward such as '#', '000', '0' or 'MUL', or none. " +
+			"For how current the data is, use layer_info's data_range, not the table's name. " +
 			"Filter dates with DATE 'YYYY-MM-DD'. For counts or rankings (e.g. top complaint types in a ward) use summarize_layer with service=SERVICE_REQUESTS, layer_id=0 rather than paging rows.",
 	}, t.serviceRequests)
 
@@ -182,6 +183,7 @@ func (t *Tools) registerDatasets(s *mcp.Server) {
 		Description: "Building plan applications submitted to the City since 2014, newest submission first: about 250,000 rows. " +
 			"A non-spatial table with case type, suburb, erf number, plan category, work description, number of units, area and value of new work, " +
 			"submission and approval dates, and financial year. Ward_No is an integer (Ward_No = 62). " +
+			"For how current the data is, use layer_info's data_range, not the table's name. " +
 			"Filter dates with DATE 'YYYY-MM-DD'. For totals or trends (e.g. approvals per financial year) use summarize_layer with service=BUILDING_PLANS, layer_id=0.",
 	}, t.buildingPlans)
 }

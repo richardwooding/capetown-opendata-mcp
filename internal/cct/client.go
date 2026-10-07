@@ -403,6 +403,10 @@ var hubLabels = map[string]string{
 	capetown.ServiceBuildingPlans:   "Building Plan Approvals (2014 onwards)",
 }
 
+// LayerLabel returns a readable name for a layer, replacing the stale
+// upstream names of the ArcGIS Online tables.
+func LayerLabel(service, upstream string) string { return hubLabel(service, upstream) }
+
 func hubLabel(service, upstream string) string {
 	if l, ok := hubLabels[service]; ok {
 		return l
