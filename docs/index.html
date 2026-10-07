@@ -11,10 +11,10 @@
   })(window,document,'script','dataLayer','GTM-NB62JPNJ');</script>
   <!-- End Google Tag Manager -->
   <title>Cape Town Open Data · MCP server</title>
-  <meta name="description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding, service requests and 130+ ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
+  <meta name="description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding, service requests and about 150 ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Cape Town Open Data · MCP server">
-  <meta property="og:description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding, service requests and 130+ ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
+  <meta property="og:description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding, service requests and about 150 ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
   <meta property="og:url" content="https://richardwooding.github.io/capetown-opendata-mcp/">
   <meta property="og:site_name" content="Richard Wooding">
   <meta property="og:image" content="https://richardwooding.github.io/capetown-opendata-mcp/og.png">
@@ -23,7 +23,7 @@
   <meta property="og:image:alt" content="Cape Town Open Data · MCP server">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Cape Town Open Data · MCP server">
-  <meta name="twitter:description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding, service requests and 130+ ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
+  <meta name="twitter:description" content="MCP server for the City of Cape Town Open Data Portal — query wards, land parcels, water quality, load shedding, service requests and about 150 ArcGIS layers from Claude Desktop, Claude Code, or any MCP host.">
   <meta name="twitter:image" content="https://richardwooding.github.io/capetown-opendata-mcp/og.png">
   <link rel="canonical" href="https://richardwooding.github.io/capetown-opendata-mcp/">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23161b22'/%3E%3Crect x='5' y='12' width='3.5' height='7' rx='1' fill='%23a371f7'/%3E%3Crect x='10.25' y='8' width='3.5' height='11' rx='1' fill='%23bd93ff'/%3E%3Crect x='15.5' y='4' width='3.5' height='15' rx='1' fill='%23d2b3ff'/%3E%3C/svg%3E">
@@ -83,7 +83,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div>
           <p class="gl-eyebrow">mcp · cape town · open data</p>
           <h1>Query Cape Town's open data, <span class="gl-grad">from your LLM.</span></h1>
-          <p class="sub">A Model Context Protocol server that turns the City of Cape Town Open Data Portal's ArcGIS Feature Service into LLM-callable tools — with layer discovery, a generic query escape hatch, spatial &amp; attribute filtering, and in-memory caching.</p>
+          <p class="sub">A Model Context Protocol server that turns the City of Cape Town Open Data Portal's ArcGIS Feature Services into LLM-callable tools — with layer discovery, a generic query escape hatch, spatial &amp; attribute filtering, and in-memory caching.</p>
           <div class="gl-cta">
             <a class="gl-btn primary" href="#install">Install</a>
             <a class="gl-btn ghost" href="https://github.com/richardwooding/capetown-opendata-mcp">View on GitHub</a>
@@ -105,7 +105,7 @@ mcp server ready · <span class="loc">stdio · 14 tools · cache 5m</span>
 Zandvlei           <span class="ok">ok</span>       <span class="loc">2026-06</span>
 Milnerton Lagoon   <span class="warn">warn</span>     <span class="loc">2026-06</span>
 Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</span>
-<span class="loc">→ <span class="n">3</span> features · next_offset=3</span></pre>
+<span class="loc">→ <span class="n">3</span> features · next_cursor ↵</span></pre>
         </div>
       </div>
     </section>
@@ -119,19 +119,19 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
         <div class="gl-grid feat" style="margin-top:28px">
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span> Discovery</h3>
-            <p><code>service_info</code> and <code>layer_info</code> list and describe the 130+ published layers across every service, their fields, geometry, and page size.</p>
+            <p><code>service_info</code> and <code>layer_info</code> list and describe the roughly 150 published layers across thirteen services, plus the service-request and building-plan tables, with their fields, geometry, and date ranges.</p>
           </div>
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> Generic query</h3>
-            <p><code>query_layer</code> is an escape hatch over any layer by service and layer ID — WHERE, field selection, ordering, bbox, count-only, and offset pagination.</p>
+            <p><code>query_layer</code> is an escape hatch over any layer by service and layer ID — WHERE, field selection, ordering, bbox, count-only, and cursor paging.</p>
           </div>
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span> Spatial &amp; attribute filters</h3>
             <p>Combine SQL <code>where</code>, a <code>bbox</code>, or a <code>polygon</code>. Spatial filters are sent as WGS84, so they work against any projection.</p>
           </div>
           <div class="gl-card">
-            <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></span> In-memory caching</h3>
-            <p>Responses are cached with a configurable TTL (default <code>5m</code>) to spare the upstream service on repeated LLM calls.</p>
+            <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></span> Right-sized responses</h3>
+            <p>Results fit MCP tool-output limits: lean rows, simplified geometry, and a token budget you can raise. Opaque cursors keep paging stable, and a <code>5m</code> cache spares the City's servers.</p>
           </div>
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span> stdio + HTTP</h3>
@@ -139,7 +139,7 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
           </div>
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span> One-click MCP Bundle</h3>
-            <p>Every release ships signed <code>.mcpb</code> bundles per platform — open one in Claude Desktop to install, with settings for token, timeout &amp; TTL.</p>
+            <p>Every release ships <code>.mcpb</code> bundles per platform — open one in Claude Desktop to install, with settings for server, response size, token, timeout &amp; TTL.</p>
           </div>
         </div>
       </div>
@@ -160,13 +160,13 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
           <div class="gl-card"><h3><span class="tool-name">heritage_inventory</span></h3><p>Heritage inventory sites and features.</p></div>
           <div class="gl-card"><h3><span class="tool-name">service_requests</span></h3><p>Citizen service requests since 2023, about 5 million rows on ArcGIS Online.</p></div>
           <div class="gl-card"><h3><span class="tool-name">building_plan_approvals</span></h3><p>Building plan applications since 2014, newest submission first.</p></div>
-          <div class="gl-card"><h3><span class="tool-name">query_layer</span></h3><p>Generic query over any layer by service and layer ID — where / fields / order / bbox / offset / count-only.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">query_layer</span></h3><p>Generic query over any layer by service and layer ID — where / fields / order / bbox / count-only.</p></div>
           <div class="gl-card"><h3><span class="tool-name">field_values</span></h3><p>List a field's distinct values to discover valid filter values.</p></div>
           <div class="gl-card"><h3><span class="tool-name">service_info</span></h3><p>List every layer and table across all services, each tagged with its service; <code>name_contains</code> filters the listing.</p></div>
           <div class="gl-card"><h3><span class="tool-name">layer_info</span></h3><p>Describe a layer's fields, geometry type, and page size.</p></div>
           <div class="gl-card"><h3><span class="tool-name">summarize_layer</span></h3><p>Server-side counts, sums and averages over any layer, grouped by any field.</p></div>
         </div>
-        <p class="gl-hint" style="margin-top:18px">Every spatial feature-returning tool shares a filter set: <code>limit</code> (default 200, max 2000), <code>offset</code>, <code>where</code>, <code>bbox</code>, <code>polygon</code>, <code>include_geometry</code>, <code>omit_nulls</code>, and <code>use_aliases</code>. Layer IDs occasionally drift — use <code>service_info</code> / <code>layer_info</code> to find current IDs; daily live checks catch drift upstream.</p>
+        <p class="gl-hint" style="margin-top:18px">Feature-returning tools share a filter set: <code>limit</code> (default 25, max 2000), <code>where</code>, <code>fields</code>, <code>omit_nulls</code> (default on) and <code>use_aliases</code>; spatial tools add <code>bbox</code>, <code>polygon</code>, <code>include_geometry</code> and <code>geometry_detail</code> (simplified, full or centroid). To page, pass <code>next_cursor</code> back as <code>cursor</code>. Layer IDs occasionally drift — use <code>service_info</code> / <code>layer_info</code> to find current IDs; daily live checks catch drift upstream.</p>
       </div>
     </section>
 
@@ -191,7 +191,7 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
               <button class="gl-copy" data-gl-copy="i-bundle">Copy</button>
             </div>
           </div>
-          <p class="gl-hint"><a href="https://github.com/richardwooding/capetown-opendata-mcp/releases">Browse releases →</a> · The bundle's settings screen sets an optional ArcGIS token, request timeout, and cache TTL.</p>
+          <p class="gl-hint"><a href="https://github.com/richardwooding/capetown-opendata-mcp/releases">Browse releases →</a> · The bundle's settings screen sets the City server, the response size budget, an optional ArcGIS token, request timeout, and cache TTL.</p>
         </div>
 
         <div data-gl-panel="brew" hidden style="margin-top:22px">
@@ -268,6 +268,8 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
                   <tr><td>--timeout</td><td>CAPETOWN_MCP_TIMEOUT</td><td>30s</td><td>Per-request upstream timeout.</td></tr>
                   <tr><td>--cache-ttl</td><td>CAPETOWN_MCP_CACHE_TTL</td><td>5m</td><td>Response cache TTL (<code>0</code> disables).</td></tr>
                   <tr><td>--arcgis-token</td><td>CAPETOWN_MCP_ARCGIS_TOKEN</td><td>—</td><td>Optional token for authenticated services.</td></tr>
+                  <tr><td>--server</td><td>CAPETOWN_MCP_SERVER</td><td>esapqa</td><td>City server: <code>esapqa</code>, <code>citymaps</code>, or a services folder URL.</td></tr>
+                  <tr><td>--max-response-tokens</td><td>CAPETOWN_MCP_MAX_RESPONSE_TOKENS</td><td>8000</td><td>Approximate size budget for one tool response.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -300,7 +302,7 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
       </nav>
     </div>
     <div class="gl-wrap">
-      <p class="gl-hint" style="margin-top:16px">Data is City of Cape Town open data, served via the City's ArcGIS Feature Service. This project is not affiliated with the City of Cape Town.</p>
+      <p class="gl-hint" style="margin-top:16px">Data is City of Cape Town open data, served via the City's ArcGIS Feature Services and ArcGIS Online. This project is not affiliated with the City of Cape Town.</p>
     </div>
   </footer>
 
