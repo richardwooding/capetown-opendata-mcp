@@ -101,6 +101,59 @@ func TestLandParcelsSuburbFilter(t *testing.T) {
 	}
 }
 
+func TestOfficialSuburbsByName(t *testing.T) {
+	var query string
+	tools := New(capturingServer(t, &query))
+
+	if _, _, err := tools.officialSuburbs(context.Background(), nil, OfficialSuburbsInput{Suburb: "Athlone"}); err != nil {
+		t.Fatalf("officialSuburbs: %v", err)
+	}
+	if !strings.Contains(query, "UPPER%28OFC_SBRB_NAME%29") || !strings.Contains(query, "Athlone") {
+		t.Fatalf("expected a case-insensitive OFC_SBRB_NAME filter, got %q", query)
+	}
+	if !strings.Contains(query, "orderByFields=OFC_SBRB_NAME") {
+		t.Errorf("expected suburbs ordered by name, got %q", query)
+	}
+}
+
+func TestPopulationEstimatesTable(t *testing.T) {
+	var query string
+	tools := New(capturingServerBody(t, &query, `{"fields":[{"name":"FID","type":"esriFieldTypeOID"}],"features":[{"attributes":{"FID":3,"Suburb_Name":"Athlone","Estimated_population":39486.02}}]}`))
+
+	_, res, err := tools.populationEstimates(context.Background(), nil, PopulationEstimatesInput{Suburb: "athlone"})
+	if err != nil {
+		t.Fatalf("populationEstimates: %v", err)
+	}
+	if res.Count != 1 || res.Features[0].Attributes["Suburb_Name"] != "Athlone" {
+		t.Fatalf("result = %+v", res)
+	}
+	if !strings.Contains(query, "UPPER%28Suburb_Name%29+%3D+UPPER%28%27athlone%27%29") {
+		t.Errorf("expected a case-insensitive Suburb_Name filter, got %q", query)
+	}
+	if !strings.Contains(query, "orderByFields=Suburb_Name") || !strings.Contains(query, "returnGeometry=false") || strings.Contains(query, "geometry=") {
+		t.Errorf("expected ordering by suburb and no geometry, got %q", query)
+	}
+}
+
+func TestTaxiFaresFromRank(t *testing.T) {
+	var query string
+	tools := New(capturingServerBody(t, &query, `{"fields":[{"name":"FID","type":"esriFieldTypeOID"}],"features":[{"attributes":{"FID":1,"Origin_Rank_Ref_No":"MBT019","Fare":20}}]}`))
+
+	_, res, err := tools.taxiFares(context.Background(), nil, TaxiFaresInput{OriginRank: "MBT019", TableQuery: TableQuery{Where: "Fare < 30"}})
+	if err != nil {
+		t.Fatalf("taxiFares: %v", err)
+	}
+	if res.Count != 1 || res.Features[0].Attributes["Fare"] != float64(20) {
+		t.Fatalf("result = %+v", res)
+	}
+	if !strings.Contains(query, "Origin_Rank_Ref_No+%3D+%27MBT019%27") || !strings.Contains(query, "AND") || !strings.Contains(query, "Fare+%3C+30") {
+		t.Errorf("expected the rank filter AND-combined with the user where, got %q", query)
+	}
+	if !strings.Contains(query, "orderByFields=Survey_Date+DESC") {
+		t.Errorf("expected newest survey first, got %q", query)
+	}
+}
+
 // TestLandParcelsSuburbAndUserWhere checks that a dataset's own filter and a
 // user-supplied where clause are AND-combined.
 func TestLandParcelsSuburbAndUserWhere(t *testing.T) {

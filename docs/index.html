@@ -98,7 +98,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <span class="t">capetown-opendata-mcp</span>
           </div>
 <pre><span class="pr">$</span> capetown-opendata-mcp
-mcp server ready · <span class="loc">stdio · 14 tools · cache 5m</span>
+mcp server ready · <span class="loc">stdio · 17 tools · cache 5m</span>
 
 <span class="pr">›</span> water_quality <span class="loc">limit=3</span>
 <span class="hd">SITE               RESULT   SAMPLED</span>
@@ -119,7 +119,7 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
         <div class="gl-grid feat" style="margin-top:28px">
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span> Discovery</h3>
-            <p><code>service_info</code> and <code>layer_info</code> list and describe the roughly 150 published layers across thirteen services, plus the service-request and building-plan tables, with their fields, geometry, and date ranges.</p>
+            <p><code>service_info</code> and <code>layer_info</code> list and describe the roughly 150 published layers across thirteen services, plus four ArcGIS Online tables (service requests, building plans, population estimates, taxi fares), with their fields, geometry, date ranges and the City's own description of each table.</p>
           </div>
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> Generic query</h3>
@@ -148,18 +148,21 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
     <!-- TOOLS -->
     <section id="tools" class="gl-section">
       <div class="gl-wrap">
-        <p class="gl-eyebrow">fourteen tools</p>
+        <p class="gl-eyebrow">seventeen tools</p>
         <h2>Datasets, discovery, a generic query, and aggregation.</h2>
         <div class="gl-grid feat" style="margin-top:28px">
           <div class="gl-card"><h3><span class="tool-name">load_shedding_blocks</span></h3><p>Load shedding block polygons (block geometry and ID).</p></div>
           <div class="gl-card"><h3><span class="tool-name">wards</span></h3><p>Municipal ward boundaries (ward name, year).</p></div>
           <div class="gl-card"><h3><span class="tool-name">land_parcels</span></h3><p>Cadastral land parcels (erven); optional <code>suburb</code> filter.</p></div>
-          <div class="gl-card"><h3><span class="tool-name">taxi_routes</span></h3><p>Registered minibus taxi routes.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">official_suburbs</span></h3><p>Official suburb boundary polygons; look one up by <code>suburb</code>, or plot them as centroids.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">taxi_routes</span></h3><p>Registered minibus taxi route lines.</p></div>
           <div class="gl-card"><h3><span class="tool-name">water_quality</span></h3><p>Inland water quality sampling results, newest first.</p></div>
           <div class="gl-card"><h3><span class="tool-name">public_lighting</span></h3><p>Public street lighting assets.</p></div>
           <div class="gl-card"><h3><span class="tool-name">heritage_inventory</span></h3><p>Heritage inventory sites and features.</p></div>
-          <div class="gl-card"><h3><span class="tool-name">service_requests</span></h3><p>Citizen service requests since 2023, about 5 million rows on ArcGIS Online.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">service_requests</span></h3><p>Citizen service requests since 2023, about 4.5 million rows on ArcGIS Online.</p></div>
           <div class="gl-card"><h3><span class="tool-name">building_plan_approvals</span></h3><p>Building plan applications since 2014, newest submission first.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">population_estimates</span></h3><p>Modelled population and household estimates per suburb; join to <code>official_suburbs</code> to map them.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">taxi_fares</span></h3><p>Minibus taxi fares surveyed between ranks, newest first; filter by <code>origin_rank</code>.</p></div>
           <div class="gl-card"><h3><span class="tool-name">query_layer</span></h3><p>Generic query over any layer by service and layer ID — where / fields / order / bbox / count-only.</p></div>
           <div class="gl-card"><h3><span class="tool-name">field_values</span></h3><p>List a field's distinct values to discover valid filter values.</p></div>
           <div class="gl-card"><h3><span class="tool-name">service_info</span></h3><p>List every layer and table across all services, each tagged with its service; <code>name_contains</code> filters the listing.</p></div>

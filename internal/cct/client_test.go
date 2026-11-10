@@ -282,14 +282,59 @@ func TestServiceInfoAllLabelsHubTables(t *testing.T) {
 	for _, l := range c.ServiceInfoAll(context.Background()).Layers {
 		got[l.Service] = l.Name
 	}
-	if got["SERVICE_REQUESTS"] != "Service Requests (2023 onwards)" {
-		t.Errorf("SERVICE_REQUESTS label = %q", got["SERVICE_REQUESTS"])
+	want := map[string]string{
+		"SERVICE_REQUESTS":     "Service Requests (2023 onwards)",
+		"BUILDING_PLANS":       "Building Plan Approvals (2014 onwards)",
+		"POPULATION_ESTIMATES": "Population Estimates (Suburb Level)",
+		"TAXI_FARES":           "Minibus Taxi Fares (surveyed at ranks)",
+		"ODP_SPLIT_1":          "Service_Requests_2023_until_20_May_2026",
 	}
-	if got["BUILDING_PLANS"] != "Building Plan Approvals (2014 onwards)" {
-		t.Errorf("BUILDING_PLANS label = %q", got["BUILDING_PLANS"])
+	for svc, label := range want {
+		if got[svc] != label {
+			t.Errorf("%s label = %q, want the built-in fallback %q without a portal", svc, got[svc], label)
+		}
 	}
-	if got["ODP_SPLIT_1"] != "Service_Requests_2023_until_20_May_2026" {
-		t.Errorf("ODP_SPLIT_1 should keep the upstream name, got %q", got["ODP_SPLIT_1"])
+	if c.HubItem("SERVICE_REQUESTS") != nil || c.HubItem("ODP_SPLIT_1") != nil {
+		t.Error("HubItem must be nil without a portal")
+	}
+}
+
+// stubPortal serves one hub item for every item ID, pointing at data.
+func stubPortal(t *testing.T, dataURL, title string) *httptest.Server {
+	t.Helper()
+	portal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/sharing/rest/content/items/") {
+			http.NotFound(w, r)
+			return
+		}
+		id := strings.TrimPrefix(r.URL.Path, "/sharing/rest/content/items/")
+		fmt.Fprintf(w, `{"id": %q, "title": %q, "snippet": " <p>Modelled&nbsp;estimates.</p> ", "modified": 1794298382000, "url": %q}`, id, title, dataURL)
+	}))
+	t.Cleanup(portal.Close)
+	return portal
+}
+
+func TestLabelsPreferHubItemTitle(t *testing.T) {
+	data := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"layers":[],"tables":[{"id":0,"name":"Population_Estimates_2026_(Suburb_Level)"}]}`)
+	}))
+	t.Cleanup(data.Close)
+	portal := stubPortal(t, data.URL+"/Pop/FeatureServer", "Population Estimates 2025  (Suburb Level)")
+
+	c := New(Options{PortalURL: portal.URL, HTTPClient: http.DefaultClient})
+	t.Cleanup(c.Close)
+	if got := c.LayerLabel("POPULATION_ESTIMATES", "Population_Estimates_2026_(Suburb_Level)"); got != "Population Estimates 2025 (Suburb Level)" {
+		t.Errorf("label = %q, want the item title with its spacing collapsed", got)
+	}
+	if got := c.LayerLabel("ODP_SPLIT_5", "Ward"); got != "Ward" {
+		t.Errorf("ODP label = %q, want the upstream name", got)
+	}
+	item := c.HubItem("POPULATION_ESTIMATES")
+	if item == nil || item.ID != "61bd1a6c374d44a093862784b79f6c23" || item.Modified != 1794298382000 {
+		t.Fatalf("HubItem = %+v, want the stub item for the population estimates ID", item)
+	}
+	if c.HubItem("ODP_SPLIT_5") != nil {
+		t.Error("HubItem(ODP_SPLIT_5) must be nil")
 	}
 }
 

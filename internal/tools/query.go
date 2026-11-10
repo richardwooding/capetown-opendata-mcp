@@ -10,7 +10,7 @@ import (
 // QueryLayerInput is the input for the generic query_layer tool.
 type QueryLayerInput struct {
 	CommonQuery
-	Service   string   `json:"service" jsonschema:"ODP_SPLIT_*, SERVICE_REQUESTS or BUILDING_PLANS (see service_info)"`
+	Service   string   `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online table key: SERVICE_REQUESTS, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
 	LayerID   int      `json:"layer_id" jsonschema:"layer ID within the service"`
 	OrderBy   []string `json:"order_by,omitempty" jsonschema:"sort, e.g. [\"CREATED_DATE DESC\"]"`
 	CountOnly bool     `json:"count_only,omitempty" jsonschema:"return only the matching count"`
@@ -57,7 +57,7 @@ func (t *Tools) queryLayer(ctx context.Context, _ *mcp.CallToolRequest, in Query
 
 // FieldValuesInput is the input for the field_values tool.
 type FieldValuesInput struct {
-	Service string `json:"service" jsonschema:"ODP_SPLIT_*, SERVICE_REQUESTS or BUILDING_PLANS (see service_info)"`
+	Service string `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online table key: SERVICE_REQUESTS, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
 	LayerID int    `json:"layer_id" jsonschema:"layer ID within the service"`
 	Field   string `json:"field" jsonschema:"field to list values of (see layer_info)"`
 	Where   string `json:"where,omitempty" jsonschema:"optional SQL filter"`
@@ -121,7 +121,8 @@ func (t *Tools) registerQuery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "summarize_layer",
 		Description: "Server-side count/sum/avg/min/max over any layer, optionally grouped. Use for \"how many\" or \"which most\" questions instead of paging rows; " +
-			"essential for the 5-million-row SERVICE_REQUESTS table. Example: service=SERVICE_REQUESTS, layer_id=0, group_by=[\"C3_Complaint_Type\"], " +
-			"where=\"Ward = '062' AND Created_On_Date >= DATE '2026-01-01'\". Default: record_count per group, largest first.",
+			"essential for the 4.5-million-row SERVICE_REQUESTS table. Example: service=SERVICE_REQUESTS, layer_id=0, group_by=[\"C3_Complaint_Type\"], " +
+			"where=\"Ward = '062' AND CreatedOnDT >= DATE '2026-01-01'\". For a total, e.g. the city's population: service=POPULATION_ESTIMATES, " +
+			"layer_id=0, statistics=[{type: sum, field: Estimated_population}]. Default: record_count per group, largest first.",
 	}, t.summarizeLayer)
 }

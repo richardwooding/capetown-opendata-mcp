@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	capetown "github.com/richardwooding/capetown-opendata"
 	arcgis "github.com/richardwooding/go-arcgis"
 
 	"github.com/richardwooding/capetown-opendata-mcp/internal/cct"
@@ -416,7 +417,8 @@ func validateService(service string) error {
 		return fmt.Errorf("service is required; call service_info to find which service hosts the layer you want")
 	}
 	if !cct.KnownService(service) {
-		return fmt.Errorf("unknown service %q; valid services are ODP_SPLIT_1 … ODP_SPLIT_13, SERVICE_REQUESTS and BUILDING_PLANS — call service_info to list layers and their services", service)
+		return fmt.Errorf("unknown service %q; valid services are ODP_SPLIT_1 … ODP_SPLIT_13 and the ArcGIS Online tables %s — call service_info to list layers and their services",
+			service, strings.Join(capetown.HubServices(), ", "))
 	}
 	return nil
 }

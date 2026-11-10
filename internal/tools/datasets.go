@@ -47,6 +47,22 @@ func (t *Tools) landParcels(ctx context.Context, _ *mcp.CallToolRequest, in Land
 	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
 }
 
+// --- Official suburbs ---
+
+// OfficialSuburbsInput is the input for the official_suburbs tool.
+type OfficialSuburbsInput struct {
+	CommonQuery
+	Suburb string `json:"suburb,omitempty" jsonschema:"suburb name to look up (case-insensitive)"`
+}
+
+func (t *Tools) officialSuburbs(ctx context.Context, _ *mcp.CallToolRequest, in OfficialSuburbsInput) (*mcp.CallToolResult, FeatureResult, error) {
+	q := capetown.OfficialSuburbs()
+	if in.Suburb != "" {
+		q = capetown.OfficialSuburbByName(in.Suburb)
+	}
+	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
+}
+
 // --- Taxi routes ---
 
 // TaxiRoutesInput is the input for the taxi_routes tool.
@@ -132,6 +148,34 @@ func (t *Tools) buildingPlans(ctx context.Context, _ *mcp.CallToolRequest, in Bu
 	return t.run(ctx, q.Service, q.Params, in.common())
 }
 
+// PopulationEstimatesInput is the input for the population_estimates tool.
+type PopulationEstimatesInput struct {
+	TableQuery
+	Suburb string `json:"suburb,omitempty" jsonschema:"suburb name to look up (case-insensitive), e.g. Athlone"`
+}
+
+func (t *Tools) populationEstimates(ctx context.Context, _ *mcp.CallToolRequest, in PopulationEstimatesInput) (*mcp.CallToolResult, FeatureResult, error) {
+	q := capetown.PopulationEstimates()
+	if in.Suburb != "" {
+		q = capetown.PopulationEstimateForSuburb(in.Suburb)
+	}
+	return t.run(ctx, q.Service, q.Params, in.common())
+}
+
+// TaxiFaresInput is the input for the taxi_fares tool.
+type TaxiFaresInput struct {
+	TableQuery
+	OriginRank string `json:"origin_rank,omitempty" jsonschema:"origin rank reference code, e.g. MBT019 (Origin_Rank_Ref_No); use field_values or a where on Origin_Rank_Name to find one"`
+}
+
+func (t *Tools) taxiFares(ctx context.Context, _ *mcp.CallToolRequest, in TaxiFaresInput) (*mcp.CallToolResult, FeatureResult, error) {
+	q := capetown.TaxiFares()
+	if in.OriginRank != "" {
+		q = capetown.TaxiFaresFromRank(in.OriginRank)
+	}
+	return t.run(ctx, q.Service, q.Params, in.common())
+}
+
 // registerDatasets registers all per-dataset tools.
 func (t *Tools) registerDatasets(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
@@ -150,8 +194,15 @@ func (t *Tools) registerDatasets(s *mcp.Server) {
 	}, t.landParcels)
 
 	mcp.AddTool(s, &mcp.Tool{
+		Name: "official_suburbs",
+		Description: "Official suburb boundary polygons (about 780) with the suburb name in OFC_SBRB_NAME (upper case) and its key. " +
+			"Optionally look one up by suburb (case-insensitive). Use geometry_detail \"centroid\" to place suburbs on a map. " +
+			"It is the shape behind suburb-level tables: join population_estimates by name (case-insensitive), and land_parcels shares the same suburb column.",
+	}, t.officialSuburbs)
+
+	mcp.AddTool(s, &mcp.Tool{
 		Name:        "taxi_routes",
-		Description: "Registered minibus taxi routes.",
+		Description: "Registered minibus taxi route lines, each with an origin (ORGN) and destination (DSTN) name. For surveyed fares between ranks use taxi_fares.",
 	}, t.taxiRoutes)
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -171,9 +222,10 @@ func (t *Tools) registerDatasets(s *mcp.Server) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "service_requests",
-		Description: "Citizen service requests (C3 notifications) logged with the City since 2023, most recently loaded first: about 5 million rows, refreshed regularly. " +
-			"A non-spatial table with ward, suburb, sub-council, complaint type, work centre and created/completed dates. " +
-			"Ward is a zero-padded string (Ward = '062'); roughly a third of rows carry a placeholder ward such as '#', '000', '0' or 'MUL', or none. " +
+		Description: "Citizen service requests (C3 notifications) logged with the City since 2023, most recently loaded first: about 4.5 million rows, refreshed regularly. " +
+			"A non-spatial table with Sub_Council, Ward, Suburb and Suburb_Clean, C3_Complaint_Type, Work_Center, Notification_type, Longitude/Latitude columns, " +
+			"and CreatedOnDT, ChangedOnDT and CompletedDT dates. " +
+			"Ward is a zero-padded string (Ward = '062'); many rows carry a placeholder ward such as '000' or none. " +
 			"For how current the data is, use layer_info's data_range, not the table's name. " +
 			"Filter dates with DATE 'YYYY-MM-DD'. For counts or rankings (e.g. top complaint types in a ward) use summarize_layer with service=SERVICE_REQUESTS, layer_id=0 rather than paging rows.",
 	}, t.serviceRequests)
@@ -186,4 +238,22 @@ func (t *Tools) registerDatasets(s *mcp.Server) {
 			"For how current the data is, use layer_info's data_range, not the table's name. " +
 			"Filter dates with DATE 'YYYY-MM-DD'. For totals or trends (e.g. approvals per financial year) use summarize_layer with service=BUILDING_PLANS, layer_id=0.",
 	}, t.buildingPlans)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "population_estimates",
+		Description: "The City's modelled population and household estimates for about 190 official suburbs (Suburb_Name, Estimated_population, Estimated_households), ordered by suburb. " +
+			"An annual planning estimate built from the 2022 census, not an official count; values are fractional, so round them. " +
+			"Look one suburb up with suburb (case-insensitive). A non-spatial table: to map it, join by name to official_suburbs (OFC_SBRB_NAME, upper case). " +
+			"For the city total or rankings use summarize_layer with service=POPULATION_ESTIMATES, layer_id=0 and a sum of Estimated_population. " +
+			"layer_info's source says when the City last updated the estimates.",
+	}, t.populationEstimates)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "taxi_fares",
+		Description: "Minibus taxi fares surveyed at ranks, one row per origin-destination rank pair with the average fare in rands (Fare) and the survey date, newest first: about 1,100 rows. " +
+			"Each end has a rank reference (Origin_Rank_Ref_No / Destination_Rank_Ref_No, e.g. MBT019), a name and WGS84 coordinates as plain columns " +
+			"(O___X_Coordinate is longitude, O___Y_Coordinate latitude; likewise D___*); the table has no geometry. Filter departures with origin_rank. " +
+			"For the surveyed period use layer_info's data_range. For average fares by origin or destination use summarize_layer with service=TAXI_FARES, layer_id=0. " +
+			"taxi_routes holds the registered route lines.",
+	}, t.taxiFares)
 }

@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"html"
+	"regexp"
 	"strings"
 	"time"
 
@@ -51,7 +53,7 @@ type FieldInfo struct {
 
 // LayerInfoInput is the input for the layer_info tool.
 type LayerInfoInput struct {
-	Service string `json:"service" jsonschema:"ODP_SPLIT_*, SERVICE_REQUESTS or BUILDING_PLANS (see service_info)"`
+	Service string `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online table key: SERVICE_REQUESTS, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
 	LayerID int    `json:"layer_id" jsonschema:"layer ID within the service"`
 }
 
@@ -66,6 +68,15 @@ type LayerInfoResult struct {
 	MaxRecordCount int         `json:"max_record_count" jsonschema:"the server's maximum features per page"`
 	Fields         []FieldInfo `json:"fields"`
 	DataRange      *DataRange  `json:"data_range,omitempty" jsonschema:"earliest and latest record dates for time-bound tables; judge how current the data is from this, never from a table name"`
+	Source         *SourceInfo `json:"source,omitempty" jsonschema:"the hub item behind an ArcGIS Online table: the City's title and summary for the data and when it last updated the item"`
+}
+
+// SourceInfo describes the ArcGIS Online hub item that publishes a table.
+type SourceInfo struct {
+	ItemID   string `json:"item_id"`
+	Title    string `json:"title"`
+	Summary  string `json:"summary,omitempty" jsonschema:"the City's one-paragraph description of the data"`
+	Modified string `json:"modified,omitempty" jsonschema:"YYYY-MM-DD the City last updated the item"`
 }
 
 // DataRange is the span of a table's records on its main date field.
@@ -82,8 +93,28 @@ var capeTown = time.FixedZone("SAST", 2*60*60)
 // The ArcGIS Online tables are refreshed in place under names that embed old
 // dates, so their real coverage is measured from the data itself.
 var dateFields = map[string]string{
-	capetown.ServiceServiceRequests: "Created_On_Date",
+	capetown.ServiceServiceRequests: "CreatedOnDT",
 	capetown.ServiceBuildingPlans:   "Submission_Date",
+	capetown.ServiceTaxiFares:       "Survey_Date",
+}
+
+var htmlTag = regexp.MustCompile(`<[^>]*>`)
+
+// plainText flattens the HTML the portal stores in item snippets to one line.
+func plainText(s string) string {
+	return strings.Join(strings.Fields(html.UnescapeString(htmlTag.ReplaceAllString(s, " "))), " ")
+}
+
+func (t *Tools) source(service string) *SourceInfo {
+	item := t.client.HubItem(service)
+	if item == nil {
+		return nil
+	}
+	out := &SourceInfo{ItemID: item.ID, Title: plainText(item.Title), Summary: plainText(item.Snippet)}
+	if m := item.ModifiedTime(); !m.IsZero() {
+		out.Modified = m.In(capeTown).Format(time.DateOnly)
+	}
+	return out
 }
 
 func (t *Tools) dataRange(ctx context.Context, service string, layerID int) *DataRange {
@@ -122,7 +153,7 @@ func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerI
 	out := LayerInfoResult{
 		Service:        in.Service,
 		ID:             info.ID,
-		Name:           cct.LayerLabel(in.Service, info.Name),
+		Name:           t.client.LayerLabel(in.Service, info.Name),
 		Type:           info.Type,
 		Description:    info.Description,
 		GeometryType:   info.GeometryType,
@@ -133,17 +164,18 @@ func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerI
 		out.Fields = append(out.Fields, FieldInfo{Name: f.Name, Type: f.Type, Alias: f.Alias})
 	}
 	out.DataRange = t.dataRange(ctx, in.Service, in.LayerID)
+	out.Source = t.source(in.Service)
 	return nil, out, nil
 }
 
 func (t *Tools) registerDiscovery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "service_info",
-		Description: "List every layer and table in the Cape Town Open Data portal with the service that hosts it: thirteen ODP_SPLIT_* services plus the SERVICE_REQUESTS and BUILDING_PLANS tables. Use it to find the service + layer_id for other tools; name_contains filters by name.",
+		Description: "List every layer and table in the Cape Town Open Data portal with the service that hosts it: thirteen ODP_SPLIT_* services plus the ArcGIS Online tables SERVICE_REQUESTS, BUILDING_PLANS, POPULATION_ESTIMATES and TAXI_FARES. Use it to find the service + layer_id for other tools; name_contains filters by name.",
 	}, t.serviceInfo)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "layer_info",
-		Description: "Describe a layer's fields, geometry type and page size, to find valid names for where, fields and order_by.",
+		Description: "Describe a layer's fields, geometry type and page size, to find valid names for where, fields and order_by. For ArcGIS Online tables it adds data_range (actual record dates) and source (the City's title, summary and last update of the hub item).",
 	}, t.layerInfo)
 }

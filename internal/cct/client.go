@@ -66,6 +66,9 @@ type Client struct {
 	newArc  func(service string) *arcgis.Client
 	mu      sync.Mutex
 	clients map[string]*arcgis.Client
+	// items holds the hub item behind each ArcGIS Online service once its URL
+	// has been resolved; absent when the portal lookup failed.
+	items map[string]*arcgis.Item
 
 	cache      *cache.Cache
 	maxRetries int
@@ -89,15 +92,11 @@ func New(opts Options) *Client {
 	if folder == "" {
 		folder = capetown.BaseFolder
 	}
+	// BaseURL points every service at one test server; it also skips the
+	// portal unless a PortalURL stub is given, so unit tests stay offline.
 	resolve := hubResolver(opts)
-	baseFor := func(service string) string {
-		if override != "" {
-			return override
-		}
-		if u, ok := resolve(service); ok {
-			return u
-		}
-		return capetown.ServiceURLIn(folder, service)
+	if override != "" && opts.PortalURL == "" {
+		resolve = func(string) (*arcgis.Item, bool) { return nil, false }
 	}
 	retries := opts.MaxRetries
 	switch {
@@ -110,21 +109,37 @@ func New(opts Options) *Client {
 	if backoff <= 0 {
 		backoff = defaultRetryBackoff
 	}
-	return &Client{
-		newArc:     func(service string) *arcgis.Client { return arcgis.NewClient(baseFor(service), aopts...) },
+	c := &Client{
 		clients:    make(map[string]*arcgis.Client),
+		items:      make(map[string]*arcgis.Item),
 		cache:      cache.New(opts.CacheTTL, opts.CacheCapacity),
 		maxRetries: retries,
 		backoff:    backoff,
 	}
+	// newArc runs under c.mu (see arc), so it may write c.items directly.
+	c.newArc = func(service string) *arcgis.Client {
+		base := override
+		if base == "" {
+			base = capetown.ServiceURLIn(folder, service)
+		}
+		if item, ok := resolve(service); ok {
+			c.items[service] = item
+			if override == "" {
+				base = item.URL
+			}
+		}
+		return arcgis.NewClient(base, aopts...)
+	}
+	return c
 }
 
-// hubResolver looks up the current URL of an ArcGIS Online dataset from its
-// hub item ID. The City republishes these under new date-stamped names, so the
-// item ID outlives any URL. A failed lookup falls back to the known URL rather
-// than blocking queries. The token is deliberately not forwarded: it belongs
-// to the City's services, not to the public portal.
-func hubResolver(opts Options) func(service string) (string, bool) {
+// hubResolver looks up an ArcGIS Online dataset's hub item from its item ID,
+// for its current URL and its title. The City republishes these under new
+// date-stamped names, so the item ID outlives any URL. A failed lookup falls
+// back to the known URL rather than blocking queries. The token is
+// deliberately not forwarded: it belongs to the City's services, not to the
+// public portal.
+func hubResolver(opts Options) func(service string) (*arcgis.Item, bool) {
 	portal := opts.PortalURL
 	if portal == "" {
 		portal = arcgis.ArcGISOnline
@@ -136,19 +151,32 @@ func hubResolver(opts Options) func(service string) (string, bool) {
 	case opts.Timeout > 0:
 		popts = append(popts, arcgis.WithTimeout(opts.Timeout))
 	}
-	return func(service string) (string, bool) {
+	return func(service string) (*arcgis.Item, bool) {
 		id, ok := capetown.HubItemID(service)
 		if !ok {
-			return "", false
+			return nil, false
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), hubLookupTimeout)
 		defer cancel()
-		u, err := arcgis.ItemURL(ctx, portal, id, popts...)
-		if err != nil {
-			return "", false
+		item, err := arcgis.ItemInfo(ctx, portal, id, popts...)
+		if err != nil || item.URL == "" {
+			return nil, false
 		}
-		return u, true
+		return item, true
 	}
+}
+
+// HubItem returns the hub item behind an ArcGIS Online service, resolving it
+// on first use, or nil for an ODP_SPLIT service or when the portal lookup
+// failed.
+func (c *Client) HubItem(service string) *arcgis.Item {
+	if _, ok := capetown.HubItemID(service); !ok {
+		return nil
+	}
+	c.arc(service)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.items[service]
 }
 
 const hubLookupTimeout = 10 * time.Second
@@ -332,7 +360,7 @@ func (c *Client) LayerInfo(ctx context.Context, service string, layerID int) (*a
 
 // ServiceLayer identifies one layer or table within a split service.
 type ServiceLayer struct {
-	Service string `json:"service" jsonschema:"the service that hosts this layer (ODP_SPLIT_*, SERVICE_REQUESTS or BUILDING_PLANS); pass it to layer_info/query_layer"`
+	Service string `json:"service" jsonschema:"the service that hosts this layer (ODP_SPLIT_* or an ArcGIS Online table key such as SERVICE_REQUESTS); pass it to layer_info/query_layer"`
 	ID      int    `json:"id" jsonschema:"the layer (or table) ID within its service"`
 	Name    string `json:"name" jsonschema:"the layer's human-readable name"`
 	IsTable bool   `json:"is_table,omitempty" jsonschema:"true when this is a non-spatial table rather than a feature layer"`
@@ -373,10 +401,10 @@ func (c *Client) ServiceInfoAll(ctx context.Context) AggregatedServiceInfo {
 				return
 			}
 			for _, l := range info.Layers {
-				slots[i].layers = append(slots[i].layers, ServiceLayer{Service: svc, ID: l.ID, Name: hubLabel(svc, l.Name)})
+				slots[i].layers = append(slots[i].layers, ServiceLayer{Service: svc, ID: l.ID, Name: c.LayerLabel(svc, l.Name)})
 			}
 			for _, tb := range info.Tables {
-				slots[i].layers = append(slots[i].layers, ServiceLayer{Service: svc, ID: tb.ID, Name: hubLabel(svc, tb.Name), IsTable: true})
+				slots[i].layers = append(slots[i].layers, ServiceLayer{Service: svc, ID: tb.ID, Name: c.LayerLabel(svc, tb.Name), IsTable: true})
 			}
 		}(i, svc)
 	}
@@ -397,21 +425,28 @@ func KnownService(name string) bool {
 	return slices.Contains(capetown.Services(), name) || slices.Contains(capetown.HubServices(), name)
 }
 
-// The upstream table names embed the date of a past refresh, which misleads.
+// The upstream table names of the ArcGIS Online datasets embed the date of a
+// past refresh, which misleads. The hub item's title is the City's own name
+// for the data; these are the fallbacks when the portal cannot be reached.
 var hubLabels = map[string]string{
-	capetown.ServiceServiceRequests: "Service Requests (2023 onwards)",
-	capetown.ServiceBuildingPlans:   "Building Plan Approvals (2014 onwards)",
+	capetown.ServiceServiceRequests:     "Service Requests (2023 onwards)",
+	capetown.ServiceBuildingPlans:       "Building Plan Approvals (2014 onwards)",
+	capetown.ServicePopulationEstimates: "Population Estimates (Suburb Level)",
+	capetown.ServiceTaxiFares:           "Minibus Taxi Fares (surveyed at ranks)",
 }
 
-// LayerLabel returns a readable name for a layer, replacing the stale
-// upstream names of the ArcGIS Online tables.
-func LayerLabel(service, upstream string) string { return hubLabel(service, upstream) }
-
-func hubLabel(service, upstream string) string {
-	if l, ok := hubLabels[service]; ok {
-		return l
+// LayerLabel returns a readable name for a layer. ODP_SPLIT layers keep their
+// upstream name; an ArcGIS Online table takes its hub item's title, or a
+// built-in label when the portal is unavailable.
+func (c *Client) LayerLabel(service, upstream string) string {
+	fallback, ok := hubLabels[service]
+	if !ok {
+		return upstream
 	}
-	return upstream
+	if item := c.HubItem(service); item != nil && strings.TrimSpace(item.Title) != "" {
+		return strings.Join(strings.Fields(item.Title), " ")
+	}
+	return fallback
 }
 
 // Statistics runs one aggregate query; it bypasses QueryLimit because ArcGIS

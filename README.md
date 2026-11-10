@@ -18,16 +18,19 @@ and attribute filtering, and in-memory response caching.
 | `load_shedding_blocks` | Load shedding block polygons (block geometry and ID). |
 | `wards` | Municipal ward boundaries (ward name, year). |
 | `land_parcels` | Cadastral land parcels (erven); optional `suburb` filter (case-insensitive). |
-| `taxi_routes` | Registered minibus taxi routes. |
+| `official_suburbs` | Official suburb boundary polygons; optional `suburb` lookup (case-insensitive). The shape behind suburb-level tables. |
+| `taxi_routes` | Registered minibus taxi route lines (origin and destination names). |
 | `water_quality` | Inland water quality sampling results (a non-spatial table), newest first. |
 | `public_lighting` | Public street lighting assets. |
 | `heritage_inventory` | Heritage inventory sites and features. |
-| `service_requests` | Citizen service requests since 2023 (about 5 million rows, a non-spatial table on ArcGIS Online), most recently loaded first. |
+| `service_requests` | Citizen service requests since 2023 (about 4.5 million rows, a non-spatial table on ArcGIS Online), most recently loaded first. |
 | `building_plan_approvals` | Building plan applications since 2014 (a non-spatial table on ArcGIS Online), newest submission first. |
+| `population_estimates` | Modelled population and household estimates per official suburb (a non-spatial table on ArcGIS Online); optional `suburb` lookup. |
+| `taxi_fares` | Minibus taxi fares surveyed at ranks per origin–destination pair (a non-spatial table on ArcGIS Online), newest survey first; optional `origin_rank` filter. |
 | `query_layer` | Generic query over any layer by `service` + `layer_id` (where/fields/order/bbox/count-only). |
 | `field_values` | List the distinct values of a field on a layer (`service` + `layer_id`); discover valid filter values. |
 | `service_info` | List every layer/table across all split services, each tagged with its host service; `name_contains` filters the listing. |
-| `layer_info` | Describe a layer's fields, geometry type, and page size (`service` + `layer_id`). |
+| `layer_info` | Describe a layer's fields, geometry type, and page size (`service` + `layer_id`); for ArcGIS Online tables also the data's date range and the City's hub item (`source`). |
 | `summarize_layer` | Server-side counts, sums, averages, minimums and maximums over any layer, optionally grouped (`service` + `layer_id`, `group_by`, `statistics`, `where`). |
 
 Every feature-returning tool accepts a shared set of filters: `limit` (default 25, max 2000),
@@ -67,14 +70,17 @@ an offset. A cursor reused with different filters is rejected rather than silent
 > `service` + `layer_id` to pass to `layer_info`, `field_values`, and `query_layer`. Published IDs
 > occasionally drift as the portal is republished, so prefer discovery over hard-coded IDs.
 >
-> Two further datasets live on ArcGIS Online rather than the split services, addressed as the
-> services `SERVICE_REQUESTS` and `BUILDING_PLANS` (layer `0`). The City republishes them under
-> date-stamped service names, so the server resolves each from its stable hub item ID at startup
-> and falls back to the last known URL. Both are tables, so they take `where`, `limit`, `cursor`,
-> `omit_nulls` and `use_aliases` but no spatial filters. Use `summarize_layer` for counts and
-> rankings rather than paging through millions of rows. In `service_requests`, `Ward` is a
-> zero-padded string (`Ward = '062'`) and about a third of rows carry a placeholder ward; dates
-> filter as `DATE 'YYYY-MM-DD'`.
+> Four further datasets live on ArcGIS Online rather than the split services, addressed as the
+> services `SERVICE_REQUESTS`, `BUILDING_PLANS`, `POPULATION_ESTIMATES` and `TAXI_FARES` (layer `0`).
+> The City republishes them under date-stamped service names, so the server resolves each from
+> its stable hub item ID at startup and falls back to the last known URL; `service_info` and
+> `layer_info` label them with the hub item's title, and `layer_info` reports the item's summary
+> and last update as `source`. All four are tables, so they take `where`, `limit`, `cursor`,
+> `omit_nulls` and `use_aliases` but no spatial filters. Use `summarize_layer` for counts,
+> totals and rankings rather than paging rows. In `service_requests`, `Ward` is a zero-padded
+> string (`Ward = '062'`) and many rows carry a placeholder ward; dates filter as
+> `DATE 'YYYY-MM-DD'`. Population estimates are keyed by suburb name: join them to
+> `official_suburbs` (case-insensitively) to put them on a map.
 
 ## Install
 

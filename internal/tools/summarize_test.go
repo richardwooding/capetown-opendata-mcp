@@ -110,12 +110,12 @@ func TestHubTableToolsSendNoGeometry(t *testing.T) {
 }
 
 func TestValidateServiceAcceptsHubServices(t *testing.T) {
-	for _, s := range []string{"SERVICE_REQUESTS", "BUILDING_PLANS", "ODP_SPLIT_12"} {
+	for _, s := range []string{"SERVICE_REQUESTS", "BUILDING_PLANS", "POPULATION_ESTIMATES", "TAXI_FARES", "ODP_SPLIT_12"} {
 		if err := validateService(s); err != nil {
 			t.Errorf("validateService(%s): %v", s, err)
 		}
 	}
-	if err := validateService("ODP_SPLIT_14"); err == nil || !strings.Contains(err.Error(), "SERVICE_REQUESTS") {
+	if err := validateService("ODP_SPLIT_14"); err == nil || !strings.Contains(err.Error(), "SERVICE_REQUESTS") || !strings.Contains(err.Error(), "TAXI_FARES") {
 		t.Errorf("want unknown-service error listing the hub services, got %v", err)
 	}
 }

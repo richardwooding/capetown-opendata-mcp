@@ -103,6 +103,10 @@ func TestLiveDatasetTools(t *testing.T) {
 			_, r, e := tl.waterQuality(ctx, nil, WaterQualityInput{CommonQuery: small})
 			return r, e
 		}, true},
+		{"official_suburbs", func() (FeatureResult, error) {
+			_, r, e := tl.officialSuburbs(ctx, nil, OfficialSuburbsInput{Suburb: "Athlone", CommonQuery: small})
+			return r, e
+		}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -220,23 +224,58 @@ func TestLiveHubTables(t *testing.T) {
 	if bp.Count == 0 {
 		t.Fatal("expected building plan rows for ward 62")
 	}
+
+	_, pe, err := tl.populationEstimates(ctx, nil, PopulationEstimatesInput{Suburb: "athlone"})
+	if err != nil {
+		t.Fatalf("population_estimates: %v", err)
+	}
+	if pe.Count != 1 || pe.Features[0].Attributes["Suburb_Name"] != "Athlone" {
+		t.Fatalf("expected one Athlone estimate, got %+v", pe.Features)
+	}
+	if pop, _ := pe.Features[0].Attributes["Estimated_population"].(float64); pop < 1000 {
+		t.Errorf("Athlone population = %v, want a plausible number", pop)
+	}
+
+	_, tf, err := tl.taxiFares(ctx, nil, TaxiFaresInput{OriginRank: "MBT019", TableQuery: TableQuery{Limit: 5}})
+	if err != nil {
+		t.Fatalf("taxi_fares: %v", err)
+	}
+	if tf.Count == 0 || tf.Features[0].Attributes["Origin_Rank_Ref_No"] != "MBT019" {
+		t.Fatalf("expected fares departing MBT019, got %+v", tf.Features)
+	}
+	if _, ok := tf.Features[0].Attributes["Fare"].(float64); !ok {
+		t.Errorf("expected a numeric Fare, got %+v", tf.Features[0].Attributes)
+	}
 }
 
 // TestLiveServiceInfoListsHubTables checks the hub tables join the catalogue
 // under their friendly labels.
 func TestLiveServiceInfoListsHubTables(t *testing.T) {
 	tl := liveTools(t)
-	_, res, err := tl.serviceInfo(context.Background(), nil, ServiceInfoInput{NameContains: "onwards"})
+	_, res, err := tl.serviceInfo(context.Background(), nil, ServiceInfoInput{})
 	if err != nil {
 		t.Fatalf("service_info: %v", err)
 	}
-	got := map[string]bool{}
+	got := map[string]ServiceLayerSummary{}
 	for _, l := range res.Layers {
-		got[l.Service] = l.IsTable
+		got[l.Service] = ServiceLayerSummary{IsTable: l.IsTable, Name: l.Name}
 	}
-	if !got["SERVICE_REQUESTS"] || !got["BUILDING_PLANS"] {
-		t.Fatalf("expected both hub tables listed as tables, got %+v", res.Layers)
+	for _, svc := range capetown.HubServices() {
+		l, ok := got[svc]
+		if !ok || !l.IsTable {
+			t.Errorf("%s: expected a table in the catalogue, got %+v (unavailable: %v)", svc, l, res.Unavailable)
+		}
+		if strings.Contains(l.Name, "_") {
+			t.Errorf("%s: name %q looks like the stale upstream name, want the hub item title", svc, l.Name)
+		}
+		t.Logf("%s: %s", svc, l.Name)
 	}
+}
+
+// ServiceLayerSummary is what the hub-table catalogue check records per service.
+type ServiceLayerSummary struct {
+	IsTable bool
+	Name    string
 }
 
 // TestLiveSummarize groups service requests by complaint type and land parcels
@@ -248,7 +287,7 @@ func TestLiveSummarize(t *testing.T) {
 	_, sr, err := tl.summarizeLayer(ctx, nil, SummarizeLayerInput{
 		Service: "SERVICE_REQUESTS", LayerID: 0,
 		GroupBy: []string{"C3_Complaint_Type"},
-		Where:   "Ward = '062' AND Created_On_Date >= DATE '2026-01-01'",
+		Where:   "Ward = '062' AND CreatedOnDT >= DATE '2026-01-01'",
 		Limit:   5,
 	})
 	if err != nil {
@@ -275,6 +314,19 @@ func TestLiveSummarize(t *testing.T) {
 		t.Fatal("expected zoning groups for Newlands")
 	}
 	t.Logf("Newlands top zoning: %v", lp.Groups[0])
+
+	_, pop, err := tl.summarizeLayer(ctx, nil, SummarizeLayerInput{
+		Service: "POPULATION_ESTIMATES", LayerID: 0,
+		Statistics: []StatisticInput{{Type: "sum", Field: "Estimated_population"}},
+	})
+	if err != nil {
+		t.Fatalf("summarize population: %v", err)
+	}
+	total, _ := pop.Groups[0]["sum_Estimated_population"].(float64)
+	if total < 4_000_000 || total > 7_000_000 {
+		t.Errorf("city population sum = %v, want roughly 5.3 million", total)
+	}
+	t.Logf("city population estimate: %.0f", total)
 }
 
 // TestLiveDefaultServerHasAllSplits checks the default server (esapqa) lists
@@ -364,10 +416,12 @@ func TestLiveCursorPaging(t *testing.T) {
 }
 
 // TestLiveLayerInfoDataRange checks the ArcGIS Online tables report a readable
-// name and a data range that runs past the date in their stale table names.
+// name, a hub source, and a data range that runs past the date in their stale
+// table names (the service requests freeze date, the building plans name's
+// year, and the taxi survey's "2023 to 2025").
 func TestLiveLayerInfoDataRange(t *testing.T) {
 	tl := liveTools(t)
-	for svc, stale := range map[string]string{"SERVICE_REQUESTS": "2026-05-20", "BUILDING_PLANS": "2025-12-31"} {
+	for svc, stale := range map[string]string{"SERVICE_REQUESTS": "2026-10-06", "BUILDING_PLANS": "2025-12-31", "TAXI_FARES": "2025-09-01"} {
 		_, res, err := tl.layerInfo(context.Background(), nil, LayerInfoInput{Service: svc, LayerID: 0})
 		if err != nil {
 			t.Fatalf("%s layer_info: %v", svc, err)
@@ -378,7 +432,17 @@ func TestLiveLayerInfoDataRange(t *testing.T) {
 		if res.DataRange.Latest <= stale {
 			t.Errorf("%s latest %s should be after the stale name's %s", svc, res.DataRange.Latest, stale)
 		}
-		t.Logf("%s: %s, %s to %s", svc, res.Name, res.DataRange.Earliest, res.DataRange.Latest)
+		if res.Source == nil || res.Source.Title == "" || res.Source.Modified == "" {
+			t.Errorf("%s: source = %+v, want the hub item's title and modified date", svc, res.Source)
+		}
+		t.Logf("%s: %s, %s to %s, source %+v", svc, res.Name, res.DataRange.Earliest, res.DataRange.Latest, res.Source)
+	}
+	_, res, err := tl.layerInfo(context.Background(), nil, LayerInfoInput{Service: "POPULATION_ESTIMATES", LayerID: 0})
+	if err != nil {
+		t.Fatalf("population layer_info: %v", err)
+	}
+	if res.DataRange != nil || res.Source == nil || !strings.Contains(res.Source.Summary, "estimates") {
+		t.Errorf("population: data_range=%+v source=%+v, want no data_range and a source summary", res.DataRange, res.Source)
 	}
 }
 
