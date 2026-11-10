@@ -192,7 +192,7 @@ func TestLiveErrorPaths(t *testing.T) {
 	t.Run("bad_field", func(t *testing.T) {
 		_, _, err := tl.queryLayer(ctx, nil, QueryLayerInput{
 			Service: "ODP_SPLIT_5", LayerID: 6,
-			CommonQuery: CommonQuery{Where: "NOT_A_FIELD = 1"},
+			Where: "NOT_A_FIELD = 1",
 		})
 		if err == nil {
 			t.Fatal("expected an error for an invalid where field")
@@ -236,7 +236,7 @@ func TestLiveHubTables(t *testing.T) {
 		t.Errorf("Athlone population = %v, want a plausible number", pop)
 	}
 
-	_, tf, err := tl.taxiFares(ctx, nil, TaxiFaresInput{OriginRank: "MBT019", TableQuery: TableQuery{Limit: 5}})
+	_, tf, err := tl.taxiFares(ctx, nil, TaxiFaresInput{OriginRank: "MBT019", Limit: 5})
 	if err != nil {
 		t.Fatalf("taxi_fares: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestLiveDefaultServerHasAllSplits(t *testing.T) {
 func TestLiveCityMapsServer(t *testing.T) {
 	c := cct.New(cct.Options{Timeout: 90 * time.Second, MaxRetries: 3, ServerFolder: capetown.FolderCityMaps})
 	t.Cleanup(c.Close)
-	_, res, err := New(c).wards(context.Background(), nil, WardsInput{CommonQuery: CommonQuery{Limit: 1}})
+	_, res, err := New(c).wards(context.Background(), nil, WardsInput{Limit: 1})
 	if err != nil || res.Count != 1 {
 		t.Fatalf("wards on citymaps: count=%d err=%v", res.Count, err)
 	}

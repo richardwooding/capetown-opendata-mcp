@@ -139,7 +139,7 @@ func TestTaxiFaresFromRank(t *testing.T) {
 	var query string
 	tools := New(capturingServerBody(t, &query, `{"fields":[{"name":"FID","type":"esriFieldTypeOID"}],"features":[{"attributes":{"FID":1,"Origin_Rank_Ref_No":"MBT019","Fare":20}}]}`))
 
-	_, res, err := tools.taxiFares(context.Background(), nil, TaxiFaresInput{OriginRank: "MBT019", TableQuery: TableQuery{Where: "Fare < 30"}})
+	_, res, err := tools.taxiFares(context.Background(), nil, TaxiFaresInput{OriginRank: "MBT019", Where: "Fare < 30"})
 	if err != nil {
 		t.Fatalf("taxiFares: %v", err)
 	}
