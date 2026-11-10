@@ -138,6 +138,17 @@ func (t *Tools) serviceRequests(ctx context.Context, _ *mcp.CallToolRequest, in 
 	return t.run(ctx, q.Service, q.Params, in.common())
 }
 
+// ServiceRequestsSpatialInput is the input for the service_requests_spatial
+// tool. It is a point layer, so the full spatial filter set applies.
+type ServiceRequestsSpatialInput struct {
+	CommonQuery
+}
+
+func (t *Tools) serviceRequestsSpatial(ctx context.Context, _ *mcp.CallToolRequest, in ServiceRequestsSpatialInput) (*mcp.CallToolResult, FeatureResult, error) {
+	q := capetown.ServiceRequestsSpatial()
+	return t.run(ctx, q.Service, q.Params, in.CommonQuery)
+}
+
 // BuildingPlansInput is the input for the building_plan_approvals tool.
 type BuildingPlansInput struct {
 	TableQuery
@@ -227,8 +238,18 @@ func (t *Tools) registerDatasets(s *mcp.Server) {
 			"and CreatedOnDT, ChangedOnDT and CompletedDT dates. " +
 			"Ward is a zero-padded string (Ward = '062'); many rows carry a placeholder ward such as '000' or none. " +
 			"For how current the data is, use layer_info's data_range, not the table's name. " +
-			"Filter dates with DATE 'YYYY-MM-DD'. For counts or rankings (e.g. top complaint types in a ward) use summarize_layer with service=SERVICE_REQUESTS, layer_id=0 rather than paging rows.",
+			"Filter dates with DATE 'YYYY-MM-DD'. For counts or rankings (e.g. top complaint types in a ward) use summarize_layer with service=SERVICE_REQUESTS, layer_id=0 rather than paging rows. " +
+			"For location questions (near a place, inside an area, on a map) use service_requests_spatial.",
 	}, t.serviceRequests)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "service_requests_spatial",
+		Description: "The geocoded subset of service_requests as points: about 3.3 million of the 4.5 million notifications, newest first, with the same attribute columns " +
+			"except that its dates are Created_On_Date, Changed_on and Completed_Date (not CreatedOnDT). " +
+			"Use it for \"near\", \"in this area\" or map questions: filter with bbox or polygon, and plot with include_geometry and geometry_detail \"centroid\". " +
+			"For counts inside an area use summarize_layer with service=SERVICE_REQUESTS_SPATIAL, layer_id=0 and the same bbox-sized where, or query_layer with count_only. " +
+			"For every notification regardless of coordinates, use service_requests.",
+	}, t.serviceRequestsSpatial)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "building_plan_approvals",

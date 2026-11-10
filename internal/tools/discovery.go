@@ -53,7 +53,7 @@ type FieldInfo struct {
 
 // LayerInfoInput is the input for the layer_info tool.
 type LayerInfoInput struct {
-	Service string `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online table key: SERVICE_REQUESTS, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
+	Service string `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online key: SERVICE_REQUESTS, SERVICE_REQUESTS_SPATIAL, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
 	LayerID int    `json:"layer_id" jsonschema:"layer ID within the service"`
 }
 
@@ -93,9 +93,10 @@ var capeTown = time.FixedZone("SAST", 2*60*60)
 // The ArcGIS Online tables are refreshed in place under names that embed old
 // dates, so their real coverage is measured from the data itself.
 var dateFields = map[string]string{
-	capetown.ServiceServiceRequests: "CreatedOnDT",
-	capetown.ServiceBuildingPlans:   "Submission_Date",
-	capetown.ServiceTaxiFares:       "Survey_Date",
+	capetown.ServiceServiceRequests:        "CreatedOnDT",
+	capetown.ServiceServiceRequestsSpatial: "Created_On_Date",
+	capetown.ServiceBuildingPlans:          "Submission_Date",
+	capetown.ServiceTaxiFares:              "Survey_Date",
 }
 
 var htmlTag = regexp.MustCompile(`<[^>]*>`)
@@ -171,7 +172,7 @@ func (t *Tools) layerInfo(ctx context.Context, _ *mcp.CallToolRequest, in LayerI
 func (t *Tools) registerDiscovery(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "service_info",
-		Description: "List every layer and table in the Cape Town Open Data portal with the service that hosts it: thirteen ODP_SPLIT_* services plus the ArcGIS Online tables SERVICE_REQUESTS, BUILDING_PLANS, POPULATION_ESTIMATES and TAXI_FARES. Use it to find the service + layer_id for other tools; name_contains filters by name.",
+		Description: "List every layer and table in the Cape Town Open Data portal with the service that hosts it: thirteen ODP_SPLIT_* services plus the ArcGIS Online datasets SERVICE_REQUESTS, SERVICE_REQUESTS_SPATIAL (a point layer), BUILDING_PLANS, POPULATION_ESTIMATES and TAXI_FARES. Use it to find the service + layer_id for other tools; name_contains filters by name.",
 	}, t.serviceInfo)
 
 	mcp.AddTool(s, &mcp.Tool{

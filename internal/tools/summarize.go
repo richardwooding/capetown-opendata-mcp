@@ -17,7 +17,7 @@ type StatisticInput struct {
 
 // SummarizeLayerInput is the input for the summarize_layer tool.
 type SummarizeLayerInput struct {
-	Service    string           `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online table key: SERVICE_REQUESTS, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
+	Service    string           `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online key: SERVICE_REQUESTS, SERVICE_REQUESTS_SPATIAL, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
 	LayerID    int              `json:"layer_id" jsonschema:"layer ID within the service"`
 	GroupBy    []string         `json:"group_by,omitempty" jsonschema:"fields to group by; omit for one total"`
 	Statistics []StatisticInput `json:"statistics,omitempty" jsonschema:"aggregates; default is record_count"`

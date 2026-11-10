@@ -116,6 +116,27 @@ func TestOfficialSuburbsByName(t *testing.T) {
 	}
 }
 
+func TestServiceRequestsSpatialBBoxAndOrder(t *testing.T) {
+	var query string
+	tools := New(capturingServer(t, &query))
+
+	_, res, err := tools.serviceRequestsSpatial(context.Background(), nil, ServiceRequestsSpatialInput{CommonQuery{
+		BBox: []float64{18.44, -33.99, 18.48, -33.96}, IncludeGeometry: true, GeometryDetail: geometryCentroid,
+	}})
+	if err != nil {
+		t.Fatalf("serviceRequestsSpatial: %v", err)
+	}
+	if !strings.Contains(query, "geometry=18.44%2C-33.99%2C18.48%2C-33.96") || !strings.Contains(query, "inSR=4326") {
+		t.Errorf("expected a WGS84 envelope filter, got %q", query)
+	}
+	if !strings.Contains(query, "orderByFields=ObjectId+DESC") {
+		t.Errorf("expected newest first, got %q", query)
+	}
+	if res.Count != 1 || res.Features[0].Geometry == nil {
+		t.Fatalf("expected one feature with geometry, got %+v", res)
+	}
+}
+
 func TestPopulationEstimatesTable(t *testing.T) {
 	var query string
 	tools := New(capturingServerBody(t, &query, `{"fields":[{"name":"FID","type":"esriFieldTypeOID"}],"features":[{"attributes":{"FID":3,"Suburb_Name":"Athlone","Estimated_population":39486.02}}]}`))

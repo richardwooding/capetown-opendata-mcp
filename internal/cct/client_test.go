@@ -283,11 +283,12 @@ func TestServiceInfoAllLabelsHubTables(t *testing.T) {
 		got[l.Service] = l.Name
 	}
 	want := map[string]string{
-		"SERVICE_REQUESTS":     "Service Requests (2023 onwards)",
-		"BUILDING_PLANS":       "Building Plan Approvals (2014 onwards)",
-		"POPULATION_ESTIMATES": "Population Estimates (Suburb Level)",
-		"TAXI_FARES":           "Minibus Taxi Fares (surveyed at ranks)",
-		"ODP_SPLIT_1":          "Service_Requests_2023_until_20_May_2026",
+		"SERVICE_REQUESTS":         "Service Requests (2023 onwards)",
+		"SERVICE_REQUESTS_SPATIAL": "Service Requests (2023 onwards, geocoded points)",
+		"BUILDING_PLANS":           "Building Plan Approvals (2014 onwards)",
+		"POPULATION_ESTIMATES":     "Population Estimates (Suburb Level)",
+		"TAXI_FARES":               "Minibus Taxi Fares (surveyed at ranks)",
+		"ODP_SPLIT_1":              "Service_Requests_2023_until_20_May_2026",
 	}
 	for svc, label := range want {
 		if got[svc] != label {

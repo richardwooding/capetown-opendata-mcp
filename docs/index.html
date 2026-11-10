@@ -98,7 +98,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <span class="t">capetown-opendata-mcp</span>
           </div>
 <pre><span class="pr">$</span> capetown-opendata-mcp
-mcp server ready · <span class="loc">stdio · 17 tools · cache 5m</span>
+mcp server ready · <span class="loc">stdio · 18 tools · cache 5m</span>
 
 <span class="pr">›</span> water_quality <span class="loc">limit=3</span>
 <span class="hd">SITE               RESULT   SAMPLED</span>
@@ -119,7 +119,7 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
         <div class="gl-grid feat" style="margin-top:28px">
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span> Discovery</h3>
-            <p><code>service_info</code> and <code>layer_info</code> list and describe the roughly 150 published layers across thirteen services, plus four ArcGIS Online tables (service requests, building plans, population estimates, taxi fares), with their fields, geometry, date ranges and the City's own description of each table.</p>
+            <p><code>service_info</code> and <code>layer_info</code> list and describe the roughly 150 published layers across thirteen services, plus five ArcGIS Online datasets (service requests as a table and as geocoded points, building plans, population estimates, taxi fares), with their fields, geometry, date ranges and the City's own description of each table.</p>
           </div>
           <div class="gl-card">
             <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> Generic query</h3>
@@ -148,7 +148,7 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
     <!-- TOOLS -->
     <section id="tools" class="gl-section">
       <div class="gl-wrap">
-        <p class="gl-eyebrow">seventeen tools</p>
+        <p class="gl-eyebrow">eighteen tools</p>
         <h2>Datasets, discovery, a generic query, and aggregation.</h2>
         <div class="gl-grid feat" style="margin-top:28px">
           <div class="gl-card"><h3><span class="tool-name">load_shedding_blocks</span></h3><p>Load shedding block polygons (block geometry and ID).</p></div>
@@ -160,6 +160,7 @@ Camps Bay tidal    <span class="ok">ok</span>       <span class="loc">2026-06</s
           <div class="gl-card"><h3><span class="tool-name">public_lighting</span></h3><p>Public street lighting assets.</p></div>
           <div class="gl-card"><h3><span class="tool-name">heritage_inventory</span></h3><p>Heritage inventory sites and features.</p></div>
           <div class="gl-card"><h3><span class="tool-name">service_requests</span></h3><p>Citizen service requests since 2023, about 4.5 million rows on ArcGIS Online.</p></div>
+          <div class="gl-card"><h3><span class="tool-name">service_requests_spatial</span></h3><p>Service requests with coordinates, as points; filter by <code>bbox</code> or <code>polygon</code>.</p></div>
           <div class="gl-card"><h3><span class="tool-name">building_plan_approvals</span></h3><p>Building plan applications since 2014, newest submission first.</p></div>
           <div class="gl-card"><h3><span class="tool-name">population_estimates</span></h3><p>Modelled population and household estimates per suburb; join to <code>official_suburbs</code> to map them.</p></div>
           <div class="gl-card"><h3><span class="tool-name">taxi_fares</span></h3><p>Minibus taxi fares surveyed between ranks, newest first; filter by <code>origin_rank</code>.</p></div>

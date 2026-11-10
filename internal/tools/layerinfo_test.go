@@ -50,6 +50,20 @@ func TestLayerInfoHubTableLabelAndDataRange(t *testing.T) {
 	}
 }
 
+func TestLayerInfoSpatialServiceRequestsDataRange(t *testing.T) {
+	tl := layerInfoServer(t, "service_requests_2023_01_02_spatial")
+	_, res, err := tl.layerInfo(context.Background(), nil, LayerInfoInput{Service: "SERVICE_REQUESTS_SPATIAL", LayerID: 0})
+	if err != nil {
+		t.Fatalf("layerInfo: %v", err)
+	}
+	if res.DataRange == nil || res.DataRange.Field != "Created_On_Date" {
+		t.Errorf("data_range = %+v, want Created_On_Date (the spatial layer keeps the old column name)", res.DataRange)
+	}
+	if res.Name != "Service Requests (2023 onwards, geocoded points)" {
+		t.Errorf("name = %q, want the fallback label", res.Name)
+	}
+}
+
 func TestLayerInfoTaxiFaresDataRangeAndPopulationNone(t *testing.T) {
 	tl := layerInfoServer(t, "MBT(AD)_Survey 2023 24 25")
 	_, res, err := tl.layerInfo(context.Background(), nil, LayerInfoInput{Service: "TAXI_FARES", LayerID: 0})

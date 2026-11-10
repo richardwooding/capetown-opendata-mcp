@@ -10,7 +10,7 @@ import (
 // QueryLayerInput is the input for the generic query_layer tool.
 type QueryLayerInput struct {
 	CommonQuery
-	Service   string   `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online table key: SERVICE_REQUESTS, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
+	Service   string   `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online key: SERVICE_REQUESTS, SERVICE_REQUESTS_SPATIAL, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
 	LayerID   int      `json:"layer_id" jsonschema:"layer ID within the service"`
 	OrderBy   []string `json:"order_by,omitempty" jsonschema:"sort, e.g. [\"CREATED_DATE DESC\"]"`
 	CountOnly bool     `json:"count_only,omitempty" jsonschema:"return only the matching count"`
@@ -57,7 +57,7 @@ func (t *Tools) queryLayer(ctx context.Context, _ *mcp.CallToolRequest, in Query
 
 // FieldValuesInput is the input for the field_values tool.
 type FieldValuesInput struct {
-	Service string `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online table key: SERVICE_REQUESTS, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
+	Service string `json:"service" jsonschema:"ODP_SPLIT_* or an ArcGIS Online key: SERVICE_REQUESTS, SERVICE_REQUESTS_SPATIAL, BUILDING_PLANS, POPULATION_ESTIMATES or TAXI_FARES (see service_info)"`
 	LayerID int    `json:"layer_id" jsonschema:"layer ID within the service"`
 	Field   string `json:"field" jsonschema:"field to list values of (see layer_info)"`
 	Where   string `json:"where,omitempty" jsonschema:"optional SQL filter"`

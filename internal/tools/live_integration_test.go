@@ -14,6 +14,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -246,6 +247,30 @@ func TestLiveHubTables(t *testing.T) {
 	if _, ok := tf.Features[0].Attributes["Fare"].(float64); !ok {
 		t.Errorf("expected a numeric Fare, got %+v", tf.Features[0].Attributes)
 	}
+
+	box := []float64{18.44, -33.99, 18.48, -33.96}
+	_, sp, err := tl.serviceRequestsSpatial(ctx, nil, ServiceRequestsSpatialInput{CommonQuery{
+		BBox: box, Where: "Created_On_Date >= DATE '2026-01-01'", Limit: 3, IncludeGeometry: true, GeometryDetail: geometryCentroid,
+		Fields: []string{"C3_Complaint_Type", "Created_On_Date"},
+	}})
+	if err != nil {
+		t.Fatalf("service_requests_spatial: %v", err)
+	}
+	if sp.Count == 0 {
+		t.Fatal("expected geocoded service requests in the Newlands box")
+	}
+	for _, f := range sp.Features {
+		var g struct {
+			Coordinates []float64 `json:"coordinates"`
+		}
+		raw, _ := json.Marshal(f.Geometry)
+		if err := json.Unmarshal(raw, &g); err != nil || len(g.Coordinates) != 2 {
+			t.Fatalf("geometry %s is not a point: %v", raw, err)
+		}
+		if x, y := g.Coordinates[0], g.Coordinates[1]; x < box[0] || x > box[2] || y < box[1] || y > box[3] {
+			t.Errorf("point %v outside bbox %v", g.Coordinates, box)
+		}
+	}
 }
 
 // TestLiveServiceInfoListsHubTables checks the hub tables join the catalogue
@@ -262,8 +287,9 @@ func TestLiveServiceInfoListsHubTables(t *testing.T) {
 	}
 	for _, svc := range capetown.HubServices() {
 		l, ok := got[svc]
-		if !ok || !l.IsTable {
-			t.Errorf("%s: expected a table in the catalogue, got %+v (unavailable: %v)", svc, l, res.Unavailable)
+		wantTable := svc != capetown.ServiceServiceRequestsSpatial
+		if !ok || l.IsTable != wantTable {
+			t.Errorf("%s: expected in the catalogue with is_table=%v, got %+v (unavailable: %v)", svc, wantTable, l, res.Unavailable)
 		}
 		if strings.Contains(l.Name, "_") {
 			t.Errorf("%s: name %q looks like the stale upstream name, want the hub item title", svc, l.Name)
@@ -421,7 +447,7 @@ func TestLiveCursorPaging(t *testing.T) {
 // year, and the taxi survey's "2023 to 2025").
 func TestLiveLayerInfoDataRange(t *testing.T) {
 	tl := liveTools(t)
-	for svc, stale := range map[string]string{"SERVICE_REQUESTS": "2026-10-06", "BUILDING_PLANS": "2025-12-31", "TAXI_FARES": "2025-09-01"} {
+	for svc, stale := range map[string]string{"SERVICE_REQUESTS": "2026-10-06", "SERVICE_REQUESTS_SPATIAL": "2026-10-06", "BUILDING_PLANS": "2025-12-31", "TAXI_FARES": "2025-09-01"} {
 		_, res, err := tl.layerInfo(context.Background(), nil, LayerInfoInput{Service: svc, LayerID: 0})
 		if err != nil {
 			t.Fatalf("%s layer_info: %v", svc, err)

@@ -24,6 +24,7 @@ and attribute filtering, and in-memory response caching.
 | `public_lighting` | Public street lighting assets. |
 | `heritage_inventory` | Heritage inventory sites and features. |
 | `service_requests` | Citizen service requests since 2023 (about 4.5 million rows, a non-spatial table on ArcGIS Online), most recently loaded first. |
+| `service_requests_spatial` | The geocoded subset of service requests as points (about 3.3 million rows on ArcGIS Online); takes `bbox` and `polygon`. |
 | `building_plan_approvals` | Building plan applications since 2014 (a non-spatial table on ArcGIS Online), newest submission first. |
 | `population_estimates` | Modelled population and household estimates per official suburb (a non-spatial table on ArcGIS Online); optional `suburb` lookup. |
 | `taxi_fares` | Minibus taxi fares surveyed at ranks per origin–destination pair (a non-spatial table on ArcGIS Online), newest survey first; optional `origin_rank` filter. |
@@ -70,13 +71,16 @@ an offset. A cursor reused with different filters is rejected rather than silent
 > `service` + `layer_id` to pass to `layer_info`, `field_values`, and `query_layer`. Published IDs
 > occasionally drift as the portal is republished, so prefer discovery over hard-coded IDs.
 >
-> Four further datasets live on ArcGIS Online rather than the split services, addressed as the
-> services `SERVICE_REQUESTS`, `BUILDING_PLANS`, `POPULATION_ESTIMATES` and `TAXI_FARES` (layer `0`).
+> Five further datasets live on ArcGIS Online rather than the split services, addressed as the
+> services `SERVICE_REQUESTS`, `SERVICE_REQUESTS_SPATIAL`, `BUILDING_PLANS`, `POPULATION_ESTIMATES`
+> and `TAXI_FARES` (layer `0`).
 > The City republishes them under date-stamped service names, so the server resolves each from
 > its stable hub item ID at startup and falls back to the last known URL; `service_info` and
 > `layer_info` label them with the hub item's title, and `layer_info` reports the item's summary
-> and last update as `source`. All four are tables, so they take `where`, `limit`, `cursor`,
-> `omit_nulls` and `use_aliases` but no spatial filters. Use `summarize_layer` for counts,
+> and last update as `source`. Four are tables, so they take `where`, `limit`, `cursor`,
+> `omit_nulls` and `use_aliases` but no spatial filters; `SERVICE_REQUESTS_SPATIAL` is the geocoded
+> subset of the service requests as points, so it takes `bbox` and `polygon` too (its date columns
+> are `Created_On_Date` and `Completed_Date`, not the table's `CreatedOnDT`). Use `summarize_layer` for counts,
 > totals and rankings rather than paging rows. In `service_requests`, `Ward` is a zero-padded
 > string (`Ward = '062'`) and many rows carry a placeholder ward; dates filter as
 > `DATE 'YYYY-MM-DD'`. Population estimates are keyed by suburb name: join them to

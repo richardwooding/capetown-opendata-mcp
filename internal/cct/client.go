@@ -429,10 +429,11 @@ func KnownService(name string) bool {
 // past refresh, which misleads. The hub item's title is the City's own name
 // for the data; these are the fallbacks when the portal cannot be reached.
 var hubLabels = map[string]string{
-	capetown.ServiceServiceRequests:     "Service Requests (2023 onwards)",
-	capetown.ServiceBuildingPlans:       "Building Plan Approvals (2014 onwards)",
-	capetown.ServicePopulationEstimates: "Population Estimates (Suburb Level)",
-	capetown.ServiceTaxiFares:           "Minibus Taxi Fares (surveyed at ranks)",
+	capetown.ServiceServiceRequests:        "Service Requests (2023 onwards)",
+	capetown.ServiceServiceRequestsSpatial: "Service Requests (2023 onwards, geocoded points)",
+	capetown.ServiceBuildingPlans:          "Building Plan Approvals (2014 onwards)",
+	capetown.ServicePopulationEstimates:    "Population Estimates (Suburb Level)",
+	capetown.ServiceTaxiFares:              "Minibus Taxi Fares (surveyed at ranks)",
 }
 
 // LayerLabel returns a readable name for a layer. ODP_SPLIT layers keep their
